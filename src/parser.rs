@@ -1,4 +1,5 @@
 use crate::boxes::{BoxHeader, BoxRef, FourCC, NodeKind};
+use crate::known_boxes::KnownBox;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Read, Seek, SeekFrom};
 
@@ -84,22 +85,9 @@ pub fn parse_children<R: Read + Seek>(r: &mut R, parent_end: u64) -> Result<Vec<
 
 // Known containers from ISOBMFF / MP4
 fn is_container(h: &BoxHeader) -> bool {
-    matches!(&h.typ.0,
-        b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" | b"edts" |
-        b"udta" | b"meta" | b"moof" | b"traf" | b"mfra" | b"sinf" |
-        b"ipro" | b"schi" | b"dinf" | b"iprp" | b"iloc" /* (full, but has kids via ipco) */ |
-        b"tref" | b"meco" | b"mere" | b"iref" | b"pitm" /* (full) */ |
-        b"mvex" | b"stsd" /* stsd is a full box but contains sample entries (children) */
-    )
+    KnownBox::from(h.typ).is_container()
 }
 
-// "FullBox" (version+flags) types (non-exhaustive; safe default is to treat unknown as Leaf/Unknown)
 fn is_full_box(h: &BoxHeader) -> bool {
-    matches!(&h.typ.0,
-        b"mvhd" | b"tkhd" | b"mdhd" | b"hdlr" | b"vmhd" | b"smhd" |
-        b"nmhd" | b"dref" | b"stsd" | b"stts" | b"ctts" | b"stsc" |
-        b"stsz" | b"stz2" | b"stco" | b"co64" | b"stss" | b"stsh" |
-        b"elst" | b"url " | b"urn " | b"tfhd" | b"trun" | b"mfhd" |
-        b"tfdt" | b"mehd" | b"trex" | b"pssh" | b"sidx" | b"mdat" /* not actually FullBox, will be Leaf, but harmless if absent here */
-    ) && &h.typ.0 != b"stsd" // stsd is FullBox but special-cased as container above
+    KnownBox::from(h.typ).is_full_box()
 }

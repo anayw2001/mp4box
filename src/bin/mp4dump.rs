@@ -1,11 +1,13 @@
 use clap::{ArgAction, Parser};
 use mp4box::{
-    boxes::{BoxKey, BoxRef, NodeKind},
+    boxes::{BoxKey, FourCC, NodeKind, BoxRef},
     parser::{parse_children, read_box_header},
-    registry::{Registry, default_registry},
+    registry::{default_registry, BoxValue, Registry},
     util::{hex_dump, read_slice},
 };
-use std::{fs::File};
+use serde::Serialize;
+use serde_json;
+use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Parser, Debug)]
@@ -14,21 +16,29 @@ struct Args {
     /// MP4/ISOBMFF file path
     path: String,
 
+    /// Only print subtree(s) matching a dotted path (e.g. moov.trak[0].mdia.minf.stbl)
+    #[arg(long = "filter")]
+    filter: Option<String>,
+
     /// Dump raw payload of this 4CC (e.g. --raw stsd) or uuid:xxxxxxxx...
     #[arg(long = "raw")]
     raw: Option<String>,
 
-    /// Limit recursion depth
+    /// Limit recursion depth (for text/tree output)
     #[arg(long, default_value_t = 64)]
     max_depth: usize,
 
     /// Print structured values when a decoder exists
-    #[arg(long, action=ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue)]
     decode: bool,
 
     /// Show bytes count when dumping raw (0 means entire box payload)
     #[arg(long, default_value_t = 0)]
     bytes: usize,
+
+    /// Emit JSON instead of human-readable tree
+    #[arg(long, action = ArgAction::SetTrue)]
+    json: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -43,22 +53,24 @@ fn main() -> anyhow::Result<()> {
             let h = read_box_header(&mut f)?;
             let box_end = if h.size == 0 { file_len } else { h.start + h.size };
 
-            // Try to parse subtree (container full parse), else leaf
             let kind = if is_container(&h) {
                 f.seek(SeekFrom::Start(h.start + h.header_size))?;
                 NodeKind::Container(parse_children(&mut f, box_end)?)
             } else if is_full_box(&h) {
                 f.seek(SeekFrom::Start(h.start + h.header_size))?;
-                // Reuse parse_children to get FullBox; simplest is call again
-                // use mp4box::parser::read_box_header as _; // silence warn
-                // But we want FullBox meta: read version+flags inline:
-                use byteorder::{ReadBytesExt};
+                use byteorder::ReadBytesExt;
                 let version = f.read_u8()?;
-                let mut fl = [0u8;3]; f.read_exact(&mut fl)?;
+                let mut fl = [0u8; 3];
+                f.read_exact(&mut fl)?;
                 let flags = ((fl[0] as u32) << 16) | ((fl[1] as u32) << 8) | (fl[2] as u32);
                 let data_offset = f.stream_position()?;
                 let data_len = box_end.saturating_sub(data_offset);
-                NodeKind::FullBox { version, flags, data_offset, data_len }
+                NodeKind::FullBox {
+                    version,
+                    flags,
+                    data_offset,
+                    data_len,
+                }
             } else {
                 let data_offset = h.start + h.header_size;
                 let data_len = box_end.saturating_sub(data_offset);
@@ -69,20 +81,37 @@ fn main() -> anyhow::Result<()> {
                 }
             };
             f.seek(SeekFrom::Start(box_end))?;
-            kids.push(mp4box::boxes::BoxRef { hdr: h, kind });
+            kids.push(BoxRef { hdr: h, kind });
         }
         kids
     };
 
-    // Setup registry with decoders
     let reg = default_registry();
 
-    // Printing tree
-    for b in &top {
+    // Target roots for printing/JSON
+    let targets: Vec<&BoxRef> = if let Some(path) = &args.filter {
+        select_by_path(&top, path)
+    } else {
+        top.iter().collect()
+    };
+
+    // JSON mode: output JSON and exit (no tree or raw to keep output clean)
+    if args.json {
+        let mut json_file = File::open(&args.path)?; // fresh handle for decoding
+        let json_boxes: Vec<JsonBox> = targets
+            .iter()
+            .map(|b| build_json_for_box(&mut json_file, b, args.decode, &reg))
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&json_boxes)?);
+        return Ok(());
+    }
+
+    // Text tree
+    for b in &targets {
         print_box(&mut f, b, 0, args.max_depth, args.decode, &reg)?;
     }
 
-    // Optional raw dump
+    // Optional raw dump (unfiltered: still walks the whole tree)
     if let Some(sel) = args.raw.as_ref() {
         dump_raw(&mut f, &top, sel, args.bytes)?;
     }
@@ -90,9 +119,11 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// ---------- Human-readable tree ----------
+
 fn print_box(
     f: &mut File,
-    b: &mp4box::boxes::BoxRef,
+    b: &BoxRef,
     depth: usize,
     max_depth: usize,
     decode: bool,
@@ -102,26 +133,36 @@ fn print_box(
     let hdr = &b.hdr;
     match &b.kind {
         NodeKind::FullBox { version, flags, .. } => {
-            println!("{indent}{:>6} {:>10} {} (ver={}, flags=0x{:06x})",
+            println!(
+                "{indent}{:>6} {:>10} {} (ver={}, flags=0x{:06x})",
                 format!("{:#x}", hdr.start),
                 hdr.size,
                 display_type(hdr),
-                version, flags
+                version,
+                flags
             );
             if decode {
                 maybe_decode(f, b, reg)?;
             }
         }
         NodeKind::Leaf { .. } | NodeKind::Unknown { .. } => {
-            println!("{indent}{:>6} {:>10} {}",
-                format!("{:#x}", hdr.start), hdr.size, display_type(hdr));
+            println!(
+                "{indent}{:>6} {:>10} {}",
+                format!("{:#x}", hdr.start),
+                hdr.size,
+                display_type(hdr)
+            );
             if decode {
                 maybe_decode(f, b, reg)?;
             }
         }
         NodeKind::Container(children) => {
-            println!("{indent}{:>6} {:>10} {} (container)",
-                format!("{:#x}", hdr.start), hdr.size, display_type(hdr));
+            println!(
+                "{indent}{:>6} {:>10} {} (container)",
+                format!("{:#x}", hdr.start),
+                hdr.size,
+                display_type(hdr)
+            );
             if depth + 1 <= max_depth {
                 for c in children {
                     print_box(f, c, depth + 1, max_depth, decode, reg)?;
@@ -134,91 +175,107 @@ fn print_box(
 
 fn display_type(h: &mp4box::boxes::BoxHeader) -> String {
     if &h.typ.0 == b"uuid" {
-        let u = h.uuid.unwrap_or([0u8;16]);
+        let u = h.uuid.unwrap_or([0u8; 16]);
         format!("uuid:{:02x?}", u)
     } else {
         h.typ.to_string()
     }
 }
 
-fn maybe_decode(f: &mut File, b: &BoxRef, reg: &Registry) -> anyhow::Result<()> {
-    use std::io::{Seek, SeekFrom};
+// ---------- Decoding helpers (shared by text + JSON) ----------
 
+fn payload_region(b: &BoxRef) -> Option<(BoxKey, u64, u64)> {
     let key = if &b.hdr.typ.0 == b"uuid" {
         BoxKey::Uuid(b.hdr.uuid.unwrap())
     } else {
         BoxKey::FourCC(b.hdr.typ)
     };
 
-    // Recompute offset/len for safety
-    let (off, len) = match &b.kind {
-        // For FullBox we trust stored offsets (already after version+flags)
-        NodeKind::FullBox { data_offset, data_len, .. } => (*data_offset, *data_len),
-
-        // For Leaf/Unknown, derive payload from header
+    match &b.kind {
+        NodeKind::FullBox {
+            data_offset,
+            data_len,
+            ..
+        } => Some((key, *data_offset, *data_len)),
         NodeKind::Leaf { .. } | NodeKind::Unknown { .. } => {
             let hdr = &b.hdr;
             if hdr.size == 0 {
-                // extends to parent; we don't know the end here -> skip decoding
-                return Ok(());
+                return None;
             }
             let off = hdr.start + hdr.header_size;
             let len = hdr.size.saturating_sub(hdr.header_size);
             if len == 0 {
-                return Ok(());
+                return None;
             }
-            (off, len)
+            Some((key, off, len))
         }
+        NodeKind::Container(_) => None,
+    }
+}
 
-        NodeKind::Container(_) => {
-            // containers don't have direct payload
-            return Ok(());
-        }
-    };
-
+fn decode_value(f: &mut File, b: &BoxRef, reg: &Registry) -> Option<String> {
+    use std::io::{Seek, SeekFrom};
+    let (key, off, len) = payload_region(b)?;
     if len == 0 {
-        return Ok(());
+        return None;
     }
 
-    f.seek(SeekFrom::Start(off))?;
+    if f.seek(SeekFrom::Start(off)).is_err() {
+        return None;
+    }
     let mut limited = f.take(len);
 
     if let Some(res) = reg.decode(&key, &mut limited, &b.hdr) {
         match res {
-            Ok(mp4box::registry::BoxValue::Text(s)) => {
-                println!("        -> {}", s);
-            }
-            Ok(mp4box::registry::BoxValue::Bytes(bytes)) => {
-                println!("        -> {} bytes", bytes.len());
-            }
-            Err(e) => {
-                // Don't fail the whole dump; just annotate
-                println!("        -> [decode error: {}]", e);
-            }
+            Ok(BoxValue::Text(s)) => Some(s),
+            Ok(BoxValue::Bytes(bytes)) => Some(format!("{} bytes", bytes.len())),
+            Err(e) => Some(format!("[decode error: {}]", e)),
         }
+    } else {
+        None
     }
+}
 
-    f.seek(SeekFrom::Start(off + len))?;
+fn maybe_decode(f: &mut File, b: &BoxRef, reg: &Registry) -> anyhow::Result<()> {
+    if let Some(s) = decode_value(f, b, reg) {
+        println!("        -> {}", s);
+    }
     Ok(())
 }
 
+// ---------- Raw dump ----------
 
-fn dump_raw(f: &mut File, boxes: &[mp4box::boxes::BoxRef], sel: &str, limit: usize) -> anyhow::Result<()> {
+fn dump_raw(
+    f: &mut File,
+    boxes: &[BoxRef],
+    sel: &str,
+    limit: usize,
+) -> anyhow::Result<()> {
     let mut matches = Vec::new();
     select_boxes(boxes, sel, &mut matches);
     for (i, (off, len, hdr)) in matches.into_iter().enumerate() {
-        let to_read = if limit == 0 || limit as u64 > len { len } else { limit as u64 };
+        let to_read = if limit == 0 || limit as u64 > len {
+            len
+        } else {
+            limit as u64
+        };
         let data = read_slice(f, off, to_read)?;
-        println!("\n== Dump {} ({}) payload: offset={:#x}, len={} ==", i, display_type(&hdr), off, to_read);
+        println!(
+            "\n== Dump {} ({}) payload: offset={:#x}, len={} ==",
+            i,
+            display_type(&hdr),
+            off,
+            to_read
+        );
         print!("{}", hex_dump(&data, off));
     }
     Ok(())
 }
 
 fn select_boxes<'a>(
-    list: &'a [mp4box::boxes::BoxRef],
+    list: &'a [BoxRef],
     sel: &str,
-    out: &mut Vec<(u64, u64, mp4box::boxes::BoxHeader)>
+    out: &mut Vec<(u64, u64, mp4box::boxes::BoxHeader)>,
 ) {
     use mp4box::boxes::{BoxHeader, FourCC, NodeKind};
 
@@ -239,17 +296,26 @@ fn select_boxes<'a>(
 
         if matches_sel {
             match &b.kind {
-                NodeKind::FullBox { data_offset, data_len, .. } => {
+                NodeKind::FullBox {
+                    data_offset,
+                    data_len,
+                    ..
+                } => {
                     out.push((*data_offset, *data_len, b.hdr.clone()));
                 }
-                NodeKind::Leaf { data_offset, data_len } => {
+                NodeKind::Leaf {
+                    data_offset,
+                    data_len,
+                } => {
                     out.push((*data_offset, *data_len, b.hdr.clone()));
                 }
-                NodeKind::Unknown { data_offset, data_len } => {
+                NodeKind::Unknown {
+                    data_offset,
+                    data_len,
+                } => {
                     out.push((*data_offset, *data_len, b.hdr.clone()));
                 }
                 NodeKind::Container(_) => {
-                    // Treat the container's *payload* as raw region:
                     let hdr: &BoxHeader = &b.hdr;
                     if hdr.size != 0 && hdr.size > hdr.header_size {
                         let off = hdr.start + hdr.header_size;
@@ -266,21 +332,190 @@ fn select_boxes<'a>(
     }
 }
 
+// ---------- Filter path: moov.trak[0].mdia.minf.stbl ----------
 
-// local copies to avoid making parser::is_* public
+fn select_by_path<'a>(roots: &'a [BoxRef], path: &str) -> Vec<&'a BoxRef> {
+    let mut current: Vec<&'a BoxRef> = roots.iter().collect();
+
+    for (depth, seg) in path.split('.').enumerate() {
+        let (name, idx) = parse_segment(seg);
+        let fourcc = FourCC::from_str(name).unwrap_or(FourCC(*b"????"));
+        let mut next = Vec::new();
+
+        if depth == 0 {
+            // match at top level
+            let mut matches: Vec<&BoxRef> =
+                current.into_iter().filter(|b| b.hdr.typ == fourcc).collect();
+            if let Some(i) = idx {
+                if i < matches.len() {
+                    next.push(matches[i]);
+                }
+            } else {
+                next.append(&mut matches);
+            }
+        } else {
+            // match in children of current set
+            for b in &current {
+                if let NodeKind::Container(kids) = &b.kind {
+                    let mut matches: Vec<&BoxRef> =
+                        kids.iter().filter(|c| c.hdr.typ == fourcc).collect();
+                    if let Some(i) = idx {
+                        if i < matches.len() {
+                            next.push(matches[i]);
+                        }
+                    } else {
+                        next.append(&mut matches);
+                    }
+                }
+            }
+        }
+
+        current = next;
+        if current.is_empty() {
+            break;
+        }
+    }
+
+    current
+}
+
+fn parse_segment(seg: &str) -> (&str, Option<usize>) {
+    if let Some(l) = seg.find('[') {
+        let name = &seg[..l];
+        if let Some(r) = seg[l + 1..].find(']') {
+            let idx_str = &seg[l + 1..l + 1 + r];
+            let idx = idx_str.parse::<usize>().ok();
+            return (name, idx);
+        }
+        (name, None)
+    } else {
+        (seg, None)
+    }
+}
+
+// ---------- JSON representation ----------
+
+#[derive(Serialize)]
+struct JsonBox {
+    offset: u64,
+    size: u64,
+    typ: String,
+    uuid: Option<String>,
+    version: Option<u8>,
+    flags: Option<u32>,
+    kind: String,
+    decoded: Option<String>,
+    children: Option<Vec<JsonBox>>,
+}
+
+fn build_json_for_box(
+    f: &mut File,
+    b: &BoxRef,
+    decode: bool,
+    reg: &Registry,
+) -> JsonBox {
+    let hdr = &b.hdr;
+    let uuid_str = hdr.uuid.map(|u| {
+        u.iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
+    });
+
+    let (version, flags, kind_str, children) = match &b.kind {
+        NodeKind::FullBox { version, flags, .. } => (
+            Some(*version),
+            Some(*flags),
+            "full".to_string(),
+            None,
+        ),
+        NodeKind::Leaf { .. } => (None, None, "leaf".to_string(), None),
+        NodeKind::Unknown { .. } => (None, None, "unknown".to_string(), None),
+        NodeKind::Container(kids) => {
+            let child_nodes = kids
+                .iter()
+                .map(|c| build_json_for_box(f, c, decode, reg))
+                .collect();
+            (None, None, "container".to_string(), Some(child_nodes))
+        }
+    };
+
+    let decoded = if decode {
+        decode_value(f, b, reg)
+    } else {
+        None
+    };
+
+    JsonBox {
+        offset: hdr.start,
+        size: hdr.size,
+        typ: hdr.typ.to_string(),
+        uuid: uuid_str,
+        version,
+        flags,
+        kind: kind_str,
+        decoded,
+        children,
+    }
+}
+
+// ---------- local copies to avoid exposing parser internals ----------
+
 fn is_container(h: &mp4box::boxes::BoxHeader) -> bool {
-    matches!(&h.typ.0,
-        b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" | b"edts" |
-        b"udta" | b"meta" | b"moof" | b"traf" | b"mfra" | b"sinf" |
-        b"ipro" | b"schi" | b"dinf" | b"iprp" | b"tref" | b"meco" | b"iref" | b"mvex" | b"stsd"
+    matches!(
+        &h.typ.0,
+        b"moov"
+            | b"trak"
+            | b"mdia"
+            | b"minf"
+            | b"stbl"
+            | b"edts"
+            | b"udta"
+            | b"meta"
+            | b"moof"
+            | b"traf"
+            | b"mfra"
+            | b"sinf"
+            | b"ipro"
+            | b"schi"
+            | b"dinf"
+            | b"iprp"
+            | b"tref"
+            | b"meco"
+            | b"iref"
+            | b"mvex"
     )
 }
+
 fn is_full_box(h: &mp4box::boxes::BoxHeader) -> bool {
-    matches!(&h.typ.0,
-        b"mvhd" | b"tkhd" | b"mdhd" | b"hdlr" | b"vmhd" | b"smhd" |
-        b"nmhd" | b"dref" | b"stts" | b"ctts" | b"stsc" |
-        b"stsz" | b"stz2" | b"stco" | b"co64" | b"stss" | b"stsh" |
-        b"elst" | b"url " | b"urn " | b"tfhd" | b"trun" | b"mfhd" |
-        b"tfdt" | b"mehd" | b"trex" | b"pssh" | b"sidx"
+    matches!(
+        &h.typ.0,
+        b"mvhd"
+            | b"tkhd"
+            | b"mdhd"
+            | b"hdlr"
+            | b"vmhd"
+            | b"smhd"
+            | b"nmhd"
+            | b"dref"
+            | b"stts"
+            | b"ctts"
+            | b"stsc"
+            | b"stsz"
+            | b"stz2"
+            | b"stco"
+            | b"co64"
+            | b"stss"
+            | b"stsh"
+            | b"elst"
+            | b"url "
+            | b"urn "
+            | b"tfhd"
+            | b"trun"
+            | b"mfhd"
+            | b"tfdt"
+            | b"mehd"
+            | b"trex"
+            | b"pssh"
+            | b"sidx"
     )
 }

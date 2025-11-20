@@ -150,13 +150,13 @@ impl BoxDecoder for TkhdDecoder {
         }
         pos += 3;
 
-        let mut read_u32 = |pos: &mut usize| -> Option<u32> {
+        let read_u32 = |pos: &mut usize| -> Option<u32> {
             if *pos + 4 > buf.len() { return None; }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
-        let mut read_u64 = |pos: &mut usize| -> Option<u64> {
+        let read_u64 = |pos: &mut usize| -> Option<u64> {
             if *pos + 8 > buf.len() { return None; }
             let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
@@ -250,19 +250,19 @@ impl BoxDecoder for MdhdDecoder {
         }
         pos += 3;
 
-        let mut read_u32 = |pos: &mut usize| -> Option<u32> {
+        let read_u32 = |pos: &mut usize| -> Option<u32> {
             if *pos + 4 > buf.len() { return None; }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
-        let mut read_u64 = |pos: &mut usize| -> Option<u64> {
+        let read_u64 = |pos: &mut usize| -> Option<u64> {
             if *pos + 8 > buf.len() { return None; }
             let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
         };
-        let mut read_u16 = |pos: &mut usize| -> Option<u16> {
+        let read_u16 = |pos: &mut usize| -> Option<u16> {
             if *pos + 2 > buf.len() { return None; }
             let v = u16::from_be_bytes(buf[*pos..*pos + 2].try_into().unwrap());
             *pos += 2;
@@ -440,7 +440,7 @@ impl BoxDecoder for SttsDecoder {
         }
         pos += 3;
 
-        let mut read_u32 = |pos: &mut usize| -> Option<u32> {
+        let read_u32 = |pos: &mut usize| -> Option<u32> {
             if *pos + 4 > buf.len() { return None; }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
@@ -645,31 +645,31 @@ impl BoxDecoder for ElstDecoder {
         }
         pos += 3;
 
-        let mut read_u32 = |pos: &mut usize| -> Option<u32> {
+        let read_u32 = |pos: &mut usize| -> Option<u32> {
             if *pos + 4 > buf.len() { return None; }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
-        let mut read_u64 = |pos: &mut usize| -> Option<u64> {
+        let read_u64 = |pos: &mut usize| -> Option<u64> {
             if *pos + 8 > buf.len() { return None; }
             let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
         };
-        let mut read_i32 = |pos: &mut usize| -> Option<i32> {
+        let read_i32 = |pos: &mut usize| -> Option<i32> {
             if *pos + 4 > buf.len() { return None; }
             let v = i32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
-        let mut read_i64 = |pos: &mut usize| -> Option<i64> {
+        let read_i64 = |pos: &mut usize| -> Option<i64> {
             if *pos + 8 > buf.len() { return None; }
             let v = i64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
         };
-        let mut read_i16 = |pos: &mut usize| -> Option<i16> {
+        let read_i16 = |pos: &mut usize| -> Option<i16> {
             if *pos + 2 > buf.len() { return None; }
             let v = i16::from_be_bytes(buf[*pos..*pos + 2].try_into().unwrap());
             *pos += 2;
