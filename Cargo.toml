@@ -1,0 +1,22 @@
+[package]
+name = "mp4box"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-copy(ish) MP4/ISOBMFF box explorer with custom-box (uuid) support"
+license = "MIT"
+repository = "https://github.com/alfg/mp4box"
+
+[lib]
+name = "mp4box"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mp4dump"
+path = "src/bin/mp4dump.rs"
+
+[dependencies]
+anyhow = "1.0"
+byteorder = "1.5"
+thiserror = "2.0"
+clap = { version = "4.5", features = ["derive"] }
+hex = "0.4"
