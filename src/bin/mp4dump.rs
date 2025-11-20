@@ -1,11 +1,11 @@
 use clap::{ArgAction, Parser};
 use mp4box::{
-    boxes::{BoxKey, FourCC, NodeKind, BoxRef},
+    boxes::{BoxKey, BoxRef, NodeKind},
     parser::{parse_children, read_box_header},
-    registry::{FtypDecoder, Registry},
+    registry::{Registry, default_registry},
     util::{hex_dump, read_slice},
 };
-use std::fs::File;
+use std::{fs::File};
 use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Parser, Debug)]
@@ -74,8 +74,8 @@ fn main() -> anyhow::Result<()> {
         kids
     };
 
-    let reg = Registry::new()
-        .with_decoder(BoxKey::FourCC(FourCC(*b"ftyp")), "ftyp", Box::new(FtypDecoder));
+    // Setup registry with decoders
+    let reg = default_registry();
 
     // Printing tree
     for b in &top {
@@ -184,16 +184,23 @@ fn maybe_decode(f: &mut File, b: &BoxRef, reg: &Registry) -> anyhow::Result<()> 
     let mut limited = f.take(len);
 
     if let Some(res) = reg.decode(&key, &mut limited, &b.hdr) {
-        match res? {
-            mp4box::registry::BoxValue::Text(s) => println!("        -> {}", s),
-            mp4box::registry::BoxValue::Bytes(bytes) => println!("        -> {} bytes", bytes.len()),
+        match res {
+            Ok(mp4box::registry::BoxValue::Text(s)) => {
+                println!("        -> {}", s);
+            }
+            Ok(mp4box::registry::BoxValue::Bytes(bytes)) => {
+                println!("        -> {} bytes", bytes.len());
+            }
+            Err(e) => {
+                // Don't fail the whole dump; just annotate
+                println!("        -> [decode error: {}]", e);
+            }
         }
     }
 
     f.seek(SeekFrom::Start(off + len))?;
     Ok(())
 }
-
 
 
 fn dump_raw(f: &mut File, boxes: &[mp4box::boxes::BoxRef], sel: &str, limit: usize) -> anyhow::Result<()> {
