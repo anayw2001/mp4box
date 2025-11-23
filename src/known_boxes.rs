@@ -277,7 +277,8 @@ impl From<FourCC> for KnownBox {
 
             b"uuid" => KnownBox::Uuid,
 
-            _ => KnownBox::Unknown(cc),        }
+            _ => KnownBox::Unknown(cc),
+        }
     }
 }
 
@@ -455,8 +456,8 @@ impl KnownBox {
             KnownBox::Vp09 => "VP9 Video Sample Entry",
             KnownBox::Av01 => "AV1 Video Sample Entry",
             KnownBox::Mp4a => "MPEG-4 Audio Sample Entry",
-            KnownBox::Ac3  => "AC-3 Audio Sample Entry",
-            KnownBox::Ec3  => "Enhanced AC-3 Audio Sample Entry",
+            KnownBox::Ac3 => "AC-3 Audio Sample Entry",
+            KnownBox::Ec3 => "Enhanced AC-3 Audio Sample Entry",
             KnownBox::Opus => "Opus Audio Sample Entry",
             KnownBox::Samr => "AMR-NB Audio Sample Entry",
             KnownBox::Sawb => "AMR-WB Audio Sample Entry",
@@ -469,8 +470,7 @@ impl KnownBox {
             KnownBox::Fiel => "Field Handling Box",
             KnownBox::Tapt => "Track Aperture Mode Dimensions Box",
             KnownBox::Uuid => "UUID Box",
-            KnownBox::Unknown(_) => "Unknown Box"
+            KnownBox::Unknown(_) => "Unknown Box",
         }
     }
 }
-

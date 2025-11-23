@@ -14,8 +14,11 @@ impl BoxDecoder for DummyDecoder {
 
 #[test]
 fn registry_invokes_decoder() {
-    let reg = Registry::new()
-        .with_decoder(BoxKey::FourCC(FourCC(*b"test")), "test", Box::new(DummyDecoder));
+    let reg = Registry::new().with_decoder(
+        BoxKey::FourCC(FourCC(*b"test")),
+        "test",
+        Box::new(DummyDecoder),
+    );
 
     let hdr = BoxHeader {
         start: 0,

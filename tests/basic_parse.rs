@@ -1,5 +1,5 @@
-use mp4box::boxes::{BoxHeader, BoxRef, NodeKind, FourCC};
-use mp4box::parser::{read_box_header, parse_children};
+use mp4box::boxes::{FourCC};
+use mp4box::parser::{parse_children, read_box_header};
 use std::io::{Cursor, Seek, SeekFrom};
 
 fn make_minimal_file() -> Vec<u8> {

@@ -8,31 +8,60 @@ impl FourCC {
         let b = s.as_bytes();
         if b.len() == 4 {
             Some(FourCC([b[0], b[1], b[2], b[3]]))
-        } else { None }
+        } else {
+            None
+        }
     }
     pub fn as_str_lossy(&self) -> String {
-        self.0.iter().map(|&c| if (32..=126).contains(&c) { c as char } else { '.' })
+        self.0
+            .iter()
+            .map(|&c| {
+                if (32..=126).contains(&c) {
+                    c as char
+                } else {
+                    '.'
+                }
+            })
             .collect()
     }
 }
-impl fmt::Debug for FourCC { fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.as_str_lossy()) } }
-impl fmt::Display for FourCC { fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.as_str_lossy()) } }
+impl fmt::Debug for FourCC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str_lossy())
+    }
+}
+impl fmt::Display for FourCC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str_lossy())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct BoxHeader {
-    pub size: u64,          // total size including header, or 0=to parent end
-    pub typ: FourCC,        // 4CC or b"uuid"
-    pub uuid: Option<[u8;16]>,
-    pub header_size: u64,   // 8, 16, or 24
-    pub start: u64,         // file offset of header start
+    pub size: u64,   // total size including header, or 0=to parent end
+    pub typ: FourCC, // 4CC or b"uuid"
+    pub uuid: Option<[u8; 16]>,
+    pub header_size: u64, // 8, 16, or 24
+    pub start: u64,       // file offset of header start
 }
 
 #[derive(Debug)]
 pub enum NodeKind {
     Container(Vec<BoxRef>),
-    FullBox { version: u8, flags: u32, data_offset: u64, data_len: u64 },
-    Leaf { data_offset: u64, data_len: u64 },
-    Unknown { data_offset: u64, data_len: u64 },
+    FullBox {
+        version: u8,
+        flags: u32,
+        data_offset: u64,
+        data_len: u64,
+    },
+    Leaf {
+        data_offset: u64,
+        data_len: u64,
+    },
+    Unknown {
+        data_offset: u64,
+        data_len: u64,
+    },
 }
 
 #[derive(Debug)]

@@ -16,7 +16,8 @@ pub type Result<T> = std::result::Result<T, ParseError>;
 pub fn read_box_header<R: Read + Seek>(r: &mut R) -> Result<BoxHeader> {
     let start = r.stream_position()?;
     let size32 = r.read_u32::<BigEndian>()?;
-    let mut typ = [0u8; 4]; r.read_exact(&mut typ)?;
+    let mut typ = [0u8; 4];
+    r.read_exact(&mut typ)?;
     let mut size = size32 as u64;
 
     if size32 == 1 {
@@ -31,24 +32,34 @@ pub fn read_box_header<R: Read + Seek>(r: &mut R) -> Result<BoxHeader> {
     }
 
     let header_size = match (size32 == 1, &typ == b"uuid") {
-        (true, true)  => 8 + 8 + 16,
+        (true, true) => 8 + 8 + 16,
         (true, false) => 8 + 8,
         (false, true) => 8 + 16,
-        (false, false)=> 8,
+        (false, false) => 8,
     } as u64;
 
     if size != 0 && size < header_size {
         return Err(ParseError::InvalidSize);
     }
 
-    Ok(BoxHeader { size, typ: FourCC(typ), uuid, header_size, start })
+    Ok(BoxHeader {
+        size,
+        typ: FourCC(typ),
+        uuid,
+        header_size,
+        start,
+    })
 }
 
 pub fn parse_children<R: Read + Seek>(r: &mut R, parent_end: u64) -> Result<Vec<BoxRef>> {
     let mut kids = Vec::new();
     while r.stream_position()? < parent_end {
         let h = read_box_header(r)?;
-        let box_end = if h.size == 0 { parent_end } else { h.start + h.size };
+        let box_end = if h.size == 0 {
+            parent_end
+        } else {
+            h.start + h.size
+        };
 
         // Decide kind
         let kind = if is_container(&h) {
@@ -61,18 +72,30 @@ pub fn parse_children<R: Read + Seek>(r: &mut R, parent_end: u64) -> Result<Vec<
             let content_start = h.start + h.header_size;
             r.seek(SeekFrom::Start(content_start))?;
             let version = r.read_u8()?;
-            let mut f = [0u8;3]; r.read_exact(&mut f)?;
+            let mut f = [0u8; 3];
+            r.read_exact(&mut f)?;
             let flags = ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32);
             let data_offset = r.stream_position()?;
             let data_len = box_end.saturating_sub(data_offset);
-            NodeKind::FullBox { version, flags, data_offset, data_len }
+            NodeKind::FullBox {
+                version,
+                flags,
+                data_offset,
+                data_len,
+            }
         } else {
             let data_offset = h.start + h.header_size;
             let data_len = box_end.saturating_sub(data_offset);
             if &h.typ.0 == b"uuid" {
-                NodeKind::Unknown { data_offset, data_len }
+                NodeKind::Unknown {
+                    data_offset,
+                    data_len,
+                }
             } else {
-                NodeKind::Leaf { data_offset, data_len }
+                NodeKind::Leaf {
+                    data_offset,
+                    data_len,
+                }
             }
         };
 

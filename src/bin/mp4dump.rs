@@ -1,11 +1,11 @@
 use clap::{ArgAction, Parser};
 use mp4box::{
-    BoxHeader,
     boxes::{BoxKey, BoxRef, FourCC, NodeKind},
     known_boxes::KnownBox,
     parser::{parse_children, read_box_header},
-    registry::{BoxValue, Registry, default_registry},
-    util::{hex_dump, read_slice}
+    registry::{default_registry, BoxValue, Registry},
+    util::{hex_dump, read_slice},
+    BoxHeader,
 };
 use serde::Serialize;
 use serde_json;
@@ -53,7 +53,11 @@ fn main() -> anyhow::Result<()> {
         let mut kids = Vec::new();
         while f.stream_position()? < file_len {
             let h = read_box_header(&mut f)?;
-            let box_end = if h.size == 0 { file_len } else { h.start + h.size };
+            let box_end = if h.size == 0 {
+                file_len
+            } else {
+                h.start + h.size
+            };
 
             let kind = if is_container(&h) {
                 f.seek(SeekFrom::Start(h.start + h.header_size))?;
@@ -77,9 +81,15 @@ fn main() -> anyhow::Result<()> {
                 let data_offset = h.start + h.header_size;
                 let data_len = box_end.saturating_sub(data_offset);
                 if &h.typ.0 == b"uuid" {
-                    NodeKind::Unknown { data_offset, data_len }
+                    NodeKind::Unknown {
+                        data_offset,
+                        data_len,
+                    }
                 } else {
-                    NodeKind::Leaf { data_offset, data_len }
+                    NodeKind::Leaf {
+                        data_offset,
+                        data_len,
+                    }
                 }
             };
             f.seek(SeekFrom::Start(box_end))?;
@@ -215,11 +225,7 @@ fn payload_region(b: &BoxRef) -> Option<(BoxKey, u64, u64)> {
     }
 }
 
-fn decode_value(
-    f: &mut File,
-    b: &BoxRef,
-    reg: &Registry,
-) -> Option<String> {
+fn decode_value(f: &mut File, b: &BoxRef, reg: &Registry) -> Option<String> {
     let (key, off, len) = payload_region(b)?;
     if len == 0 {
         return None;
@@ -250,12 +256,7 @@ fn maybe_decode(f: &mut File, b: &BoxRef, reg: &Registry) -> anyhow::Result<()> 
 
 // ---------- Raw dump ----------
 
-fn dump_raw(
-    f: &mut File,
-    boxes: &[BoxRef],
-    sel: &str,
-    limit: usize,
-) -> anyhow::Result<()> {
+fn dump_raw(f: &mut File, boxes: &[BoxRef], sel: &str, limit: usize) -> anyhow::Result<()> {
     let mut matches = Vec::new();
     select_boxes(boxes, sel, &mut matches);
     for (i, (off, len, hdr)) in matches.into_iter().enumerate() {
@@ -349,8 +350,10 @@ fn select_by_path<'a>(roots: &'a [BoxRef], path: &str) -> Vec<&'a BoxRef> {
 
         if depth == 0 {
             // match at top level
-            let mut matches: Vec<&BoxRef> =
-                current.into_iter().filter(|b| b.hdr.typ == fourcc).collect();
+            let mut matches: Vec<&BoxRef> = current
+                .into_iter()
+                .filter(|b| b.hdr.typ == fourcc)
+                .collect();
             if let Some(i) = idx {
                 if i < matches.len() {
                     next.push(matches[i]);
@@ -420,9 +423,11 @@ struct JsonBox {
 
 fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
     match &b.kind {
-        NodeKind::FullBox { data_offset, data_len, .. } => {
-            Some((*data_offset, *data_len))
-        }
+        NodeKind::FullBox {
+            data_offset,
+            data_len,
+            ..
+        } => Some((*data_offset, *data_len)),
         NodeKind::Leaf { .. } | NodeKind::Unknown { .. } => {
             let hdr = &b.hdr;
             if hdr.size == 0 {
@@ -439,18 +444,11 @@ fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
     }
 }
 
-fn build_json_for_box(
-    f: &mut File,
-    b: &BoxRef,
-    decode: bool,
-    reg: &Registry,
-) -> JsonBox {
+fn build_json_for_box(f: &mut File, b: &BoxRef, decode: bool, reg: &Registry) -> JsonBox {
     let hdr = &b.hdr;
-    let uuid_str = hdr.uuid.map(|u| {
-        u.iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
-    });
+    let uuid_str = hdr
+        .uuid
+        .map(|u| u.iter().map(|b| format!("{:02x}", b)).collect::<String>());
 
     let kb = mp4box::known_boxes::KnownBox::from(hdr.typ);
     let full_name = kb.full_name().to_string();
@@ -461,12 +459,9 @@ fn build_json_for_box(
         .unwrap_or((None, None));
 
     let (version, flags, kind_str, children) = match &b.kind {
-        NodeKind::FullBox { version, flags, .. } => (
-            Some(*version),
-            Some(*flags),
-            "full".to_string(),
-            None,
-        ),
+        NodeKind::FullBox { version, flags, .. } => {
+            (Some(*version), Some(*flags), "full".to_string(), None)
+        }
         NodeKind::Leaf { .. } => (None, None, "leaf".to_string(), None),
         NodeKind::Unknown { .. } => (None, None, "unknown".to_string(), None),
         NodeKind::Container(kids) => {

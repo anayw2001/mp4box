@@ -1,7 +1,8 @@
 use crate::{
     boxes::{BoxRef, NodeKind},
     parser::read_box_header,
-    registry::{BoxValue, Registry, default_registry}, util::{hex_dump, read_slice},
+    registry::{default_registry, BoxValue, Registry},
+    util::{hex_dump, read_slice},
 };
 use byteorder::ReadBytesExt;
 use serde::Serialize;
@@ -19,9 +20,9 @@ use std::{
 pub struct JsonBox {
     pub offset: u64,
     pub size: u64,
-    pub header_size: u64,          // <- new
-    pub payload_offset: Option<u64>,// <- new
-    pub payload_size: Option<u64>,  // <- new
+    pub header_size: u64,            // <- new
+    pub payload_offset: Option<u64>, // <- new
+    pub payload_size: Option<u64>,   // <- new
 
     pub typ: String,
     pub uuid: Option<String>,
@@ -33,7 +34,6 @@ pub struct JsonBox {
     pub children: Option<Vec<JsonBox>>,
 }
 
-
 /// Synchronous analysis function: parse MP4 and return a box tree.
 /// This is what you’ll call from Tauri in a blocking task.
 pub fn analyze_file(path: impl AsRef<Path>, decode: bool) -> anyhow::Result<Vec<JsonBox>> {
@@ -44,7 +44,11 @@ pub fn analyze_file(path: impl AsRef<Path>, decode: bool) -> anyhow::Result<Vec<
     let mut boxes = Vec::new();
     while f.stream_position()? < file_len {
         let h = read_box_header(&mut f)?;
-        let box_end = if h.size == 0 { file_len } else { h.start + h.size };
+        let box_end = if h.size == 0 {
+            file_len
+        } else {
+            h.start + h.size
+        };
 
         let kind = if crate::known_boxes::KnownBox::from(h.typ).is_container() {
             f.seek(SeekFrom::Start(h.start + h.header_size))?;
@@ -67,9 +71,15 @@ pub fn analyze_file(path: impl AsRef<Path>, decode: bool) -> anyhow::Result<Vec<
             let data_offset = h.start + h.header_size;
             let data_len = box_end.saturating_sub(data_offset);
             if &h.typ.0 == b"uuid" {
-                NodeKind::Unknown { data_offset, data_len }
+                NodeKind::Unknown {
+                    data_offset,
+                    data_len,
+                }
             } else {
-                NodeKind::Leaf { data_offset, data_len }
+                NodeKind::Leaf {
+                    data_offset,
+                    data_len,
+                }
             }
         };
 
@@ -119,9 +129,11 @@ fn payload_region(b: &BoxRef) -> Option<(crate::boxes::BoxKey, u64, u64)> {
 
 fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
     match &b.kind {
-        NodeKind::FullBox { data_offset, data_len, .. } => {
-            Some((*data_offset, *data_len))
-        }
+        NodeKind::FullBox {
+            data_offset,
+            data_len,
+            ..
+        } => Some((*data_offset, *data_len)),
         NodeKind::Leaf { .. } | NodeKind::Unknown { .. } => {
             let hdr = &b.hdr;
             if hdr.size == 0 {
@@ -138,12 +150,7 @@ fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
     }
 }
 
-
-fn decode_value(
-    f: &mut File,
-    b: &BoxRef,
-    reg: &Registry,
-) -> Option<String> {
+fn decode_value(f: &mut File, b: &BoxRef, reg: &Registry) -> Option<String> {
     let (key, off, len) = payload_region(b)?;
     if len == 0 {
         return None;
@@ -165,18 +172,11 @@ fn decode_value(
     }
 }
 
-fn build_json_for_box(
-    f: &mut File,
-    b: &BoxRef,
-    decode: bool,
-    reg: &Registry,
-) -> JsonBox {
+fn build_json_for_box(f: &mut File, b: &BoxRef, decode: bool, reg: &Registry) -> JsonBox {
     let hdr = &b.hdr;
-    let uuid_str = hdr.uuid.map(|u| {
-        u.iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
-    });
+    let uuid_str = hdr
+        .uuid
+        .map(|u| u.iter().map(|b| format!("{:02x}", b)).collect::<String>());
 
     let kb = crate::known_boxes::KnownBox::from(hdr.typ);
     let full_name = kb.full_name().to_string();
@@ -188,12 +188,9 @@ fn build_json_for_box(
         .unwrap_or((None, None));
 
     let (version, flags, kind_str, children) = match &b.kind {
-        NodeKind::FullBox { version, flags, .. } => (
-            Some(*version),
-            Some(*flags),
-            "full".to_string(),
-            None,
-        ),
+        NodeKind::FullBox { version, flags, .. } => {
+            (Some(*version), Some(*flags), "full".to_string(), None)
+        }
         NodeKind::Leaf { .. } => (None, None, "leaf".to_string(), None),
         NodeKind::Unknown { .. } => (None, None, "unknown".to_string(), None),
         NodeKind::Container(kids) => {
@@ -253,11 +250,7 @@ pub struct HexDump {
 ///     Ok(())
 /// }
 /// ```
-pub fn hex_range<P: AsRef<Path>>(
-    path: P,
-    offset: u64,
-    max_len: u64,
-) -> anyhow::Result<HexDump> {
+pub fn hex_range<P: AsRef<Path>>(path: P, offset: u64, max_len: u64) -> anyhow::Result<HexDump> {
     use std::cmp::min;
 
     let path = path.as_ref().to_path_buf();

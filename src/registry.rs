@@ -36,15 +36,22 @@ struct BoxDecoderEntry {
 impl Registry {
     /// Create an empty registry.
     pub fn new() -> Self {
-        Self { map: HashMap::new() }
+        Self {
+            map: HashMap::new(),
+        }
     }
 
     /// Return a new registry with the given decoder added.
     ///
     /// `name` is human-readable and used only for debugging / logging.
     pub fn with_decoder(mut self, key: BoxKey, name: &str, dec: Box<dyn BoxDecoder>) -> Self {
-        self.map
-            .insert(key, BoxDecoderEntry { inner: dec, _name: name.to_string() });
+        self.map.insert(
+            key,
+            BoxDecoderEntry {
+                inner: dec,
+                _name: name.to_string(),
+            },
+        );
         self
     }
 
@@ -73,12 +80,7 @@ fn lang_from_u16(code: u16) -> String {
     let c1 = ((code >> 10) & 0x1F) as u8 + 0x60;
     let c2 = ((code >> 5) & 0x1F) as u8 + 0x60;
     let c3 = (code & 0x1F) as u8 + 0x60;
-    format!(
-        "{}{}{}",
-        c1 as char,
-        c2 as char,
-        c3 as char,
-    )
+    format!("{}{}{}", c1 as char, c2 as char, c3 as char,)
 }
 
 // ---------- Decoders ----------
@@ -90,7 +92,10 @@ impl BoxDecoder for FtypDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
         let buf = read_all(r)?;
         if buf.len() < 8 {
-            return Ok(BoxValue::Text(format!("ftyp: payload too short ({} bytes)", buf.len())));
+            return Ok(BoxValue::Text(format!(
+                "ftyp: payload too short ({} bytes)",
+                buf.len()
+            )));
         }
 
         let major = &buf[0..4];
@@ -157,7 +162,10 @@ impl BoxDecoder for TkhdDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
         let buf = read_all(r)?;
         if buf.len() < 4 {
-            return Ok(BoxValue::Text(format!("tkhd: payload too short ({} bytes)", buf.len())));
+            return Ok(BoxValue::Text(format!(
+                "tkhd: payload too short ({} bytes)",
+                buf.len()
+            )));
         }
 
         let mut pos = 0usize;
@@ -169,13 +177,17 @@ impl BoxDecoder for TkhdDecoder {
         pos += 3;
 
         let read_u32 = |pos: &mut usize| -> Option<u32> {
-            if *pos + 4 > buf.len() { return None; }
+            if *pos + 4 > buf.len() {
+                return None;
+            }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
         let read_u64 = |pos: &mut usize| -> Option<u64> {
-            if *pos + 8 > buf.len() { return None; }
+            if *pos + 8 > buf.len() {
+                return None;
+            }
             let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
@@ -187,7 +199,9 @@ impl BoxDecoder for TkhdDecoder {
         if version == 1 {
             // creation_time (8), modification_time (8), track_id (4), reserved (4), duration (8)
             if read_u64(&mut pos).is_none() || read_u64(&mut pos).is_none() {
-                return Ok(BoxValue::Text("tkhd: truncated creation/modification".into()));
+                return Ok(BoxValue::Text(
+                    "tkhd: truncated creation/modification".into(),
+                ));
             }
             track_id = read_u32(&mut pos).unwrap_or(0);
             let _ = read_u32(&mut pos); // reserved
@@ -196,7 +210,9 @@ impl BoxDecoder for TkhdDecoder {
             // version 0: creation_time (4), modification_time (4), track_id (4),
             // reserved (4), duration (4)
             if read_u32(&mut pos).is_none() || read_u32(&mut pos).is_none() {
-                return Ok(BoxValue::Text("tkhd: truncated creation/modification".into()));
+                return Ok(BoxValue::Text(
+                    "tkhd: truncated creation/modification".into(),
+                ));
             }
             track_id = read_u32(&mut pos).unwrap_or(0);
             let _ = read_u32(&mut pos); // reserved
@@ -249,7 +265,6 @@ impl BoxDecoder for TkhdDecoder {
     }
 }
 
-
 // mdhd: timescale, duration, language
 pub struct MdhdDecoder;
 
@@ -257,7 +272,10 @@ impl BoxDecoder for MdhdDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
         let buf = read_all(r)?;
         if buf.len() < 4 {
-            return Ok(BoxValue::Text(format!("mdhd: payload too short ({} bytes)", buf.len())));
+            return Ok(BoxValue::Text(format!(
+                "mdhd: payload too short ({} bytes)",
+                buf.len()
+            )));
         }
 
         let mut pos = 0usize;
@@ -269,19 +287,25 @@ impl BoxDecoder for MdhdDecoder {
         pos += 3;
 
         let read_u32 = |pos: &mut usize| -> Option<u32> {
-            if *pos + 4 > buf.len() { return None; }
+            if *pos + 4 > buf.len() {
+                return None;
+            }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
         let read_u64 = |pos: &mut usize| -> Option<u64> {
-            if *pos + 8 > buf.len() { return None; }
+            if *pos + 8 > buf.len() {
+                return None;
+            }
             let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
         };
         let read_u16 = |pos: &mut usize| -> Option<u16> {
-            if *pos + 2 > buf.len() { return None; }
+            if *pos + 2 > buf.len() {
+                return None;
+            }
             let v = u16::from_be_bytes(buf[*pos..*pos + 2].try_into().unwrap());
             *pos += 2;
             Some(v)
@@ -316,8 +340,6 @@ impl BoxDecoder for MdhdDecoder {
         )))
     }
 }
-
-
 
 // hdlr: handler type + name
 pub struct HdlrDecoder;
@@ -436,7 +458,10 @@ impl BoxDecoder for StsdDecoder {
             cur.set_position(start_pos + size - 8); // minus size+type already consumed
         }
 
-        Ok(BoxValue::Text(format!("entries={}: {:?}", entry_count, entries)))
+        Ok(BoxValue::Text(format!(
+            "entries={}: {:?}",
+            entry_count, entries
+        )))
     }
 }
 
@@ -447,7 +472,10 @@ impl BoxDecoder for SttsDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
         let buf = read_all(r)?;
         if buf.len() < 8 {
-            return Ok(BoxValue::Text(format!("stts: payload too short ({} bytes)", buf.len())));
+            return Ok(BoxValue::Text(format!(
+                "stts: payload too short ({} bytes)",
+                buf.len()
+            )));
         }
 
         let mut pos = 0usize;
@@ -459,7 +487,9 @@ impl BoxDecoder for SttsDecoder {
         pos += 3;
 
         let read_u32 = |pos: &mut usize| -> Option<u32> {
-            if *pos + 4 > buf.len() { return None; }
+            if *pos + 4 > buf.len() {
+                return None;
+            }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
@@ -488,7 +518,6 @@ impl BoxDecoder for SttsDecoder {
         }
     }
 }
-
 
 // stss: sync sample table
 pub struct StssDecoder;
@@ -526,7 +555,10 @@ impl BoxDecoder for CttsDecoder {
         };
 
         let entry_count = cur.read_u32::<BigEndian>()?;
-        Ok(BoxValue::Text(format!("version={} entries={}", version, entry_count)))
+        Ok(BoxValue::Text(format!(
+            "version={} entries={}",
+            version, entry_count
+        )))
     }
 }
 
@@ -652,7 +684,10 @@ impl BoxDecoder for ElstDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
         let buf = read_all(r)?;
         if buf.len() < 8 {
-            return Ok(BoxValue::Text(format!("elst: payload too short ({} bytes)", buf.len())));
+            return Ok(BoxValue::Text(format!(
+                "elst: payload too short ({} bytes)",
+                buf.len()
+            )));
         }
 
         let mut pos = 0usize;
@@ -664,31 +699,41 @@ impl BoxDecoder for ElstDecoder {
         pos += 3;
 
         let read_u32 = |pos: &mut usize| -> Option<u32> {
-            if *pos + 4 > buf.len() { return None; }
+            if *pos + 4 > buf.len() {
+                return None;
+            }
             let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
         let read_u64 = |pos: &mut usize| -> Option<u64> {
-            if *pos + 8 > buf.len() { return None; }
+            if *pos + 8 > buf.len() {
+                return None;
+            }
             let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
         };
         let read_i32 = |pos: &mut usize| -> Option<i32> {
-            if *pos + 4 > buf.len() { return None; }
+            if *pos + 4 > buf.len() {
+                return None;
+            }
             let v = i32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
             *pos += 4;
             Some(v)
         };
         let read_i64 = |pos: &mut usize| -> Option<i64> {
-            if *pos + 8 > buf.len() { return None; }
+            if *pos + 8 > buf.len() {
+                return None;
+            }
             let v = i64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
             *pos += 8;
             Some(v)
         };
         let read_i16 = |pos: &mut usize| -> Option<i16> {
-            if *pos + 2 > buf.len() { return None; }
+            if *pos + 2 > buf.len() {
+                return None;
+            }
             let v = i16::from_be_bytes(buf[*pos..*pos + 2].try_into().unwrap());
             *pos += 2;
             Some(v)
@@ -726,27 +771,85 @@ impl BoxDecoder for ElstDecoder {
     }
 }
 
-
-
 // ---------- Default registry ----------
 
 pub fn default_registry() -> Registry {
     use crate::boxes::BoxKey;
 
     Registry::new()
-        .with_decoder(BoxKey::FourCC(FourCC(*b"ftyp")), "ftyp", Box::new(FtypDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"mvhd")), "mvhd", Box::new(MvhdDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"tkhd")), "tkhd", Box::new(TkhdDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"mdhd")), "mdhd", Box::new(MdhdDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"hdlr")), "hdlr", Box::new(HdlrDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"sidx")), "sidx", Box::new(SidxDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"stsd")), "stsd", Box::new(StsdDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"stts")), "stts", Box::new(SttsDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"stss")), "stss", Box::new(StssDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"ctts")), "ctts", Box::new(CttsDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"stsc")), "stsc", Box::new(StscDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"stsz")), "stsz", Box::new(StszDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"stco")), "stco", Box::new(StcoDecoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"co64")), "co64", Box::new(Co64Decoder))
-        .with_decoder(BoxKey::FourCC(FourCC(*b"elst")), "elst", Box::new(ElstDecoder))
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"ftyp")),
+            "ftyp",
+            Box::new(FtypDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"mvhd")),
+            "mvhd",
+            Box::new(MvhdDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"tkhd")),
+            "tkhd",
+            Box::new(TkhdDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"mdhd")),
+            "mdhd",
+            Box::new(MdhdDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"hdlr")),
+            "hdlr",
+            Box::new(HdlrDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"sidx")),
+            "sidx",
+            Box::new(SidxDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"stsd")),
+            "stsd",
+            Box::new(StsdDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"stts")),
+            "stts",
+            Box::new(SttsDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"stss")),
+            "stss",
+            Box::new(StssDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"ctts")),
+            "ctts",
+            Box::new(CttsDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"stsc")),
+            "stsc",
+            Box::new(StscDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"stsz")),
+            "stsz",
+            Box::new(StszDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"stco")),
+            "stco",
+            Box::new(StcoDecoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"co64")),
+            "co64",
+            Box::new(Co64Decoder),
+        )
+        .with_decoder(
+            BoxKey::FourCC(FourCC(*b"elst")),
+            "elst",
+            Box::new(ElstDecoder),
+        )
 }

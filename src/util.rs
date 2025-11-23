@@ -13,10 +13,17 @@ pub fn hex_dump(bytes: &[u8], start_offset: u64) -> String {
     for (i, chunk) in bytes.chunks(16).enumerate() {
         let offs = start_offset + (i as u64) * 16;
         let hexs: String = chunk.iter().map(|b| format!("{:02x} ", b)).collect();
-        let ascii: String = chunk.iter().map(|b| {
-            let c = *b;
-            if (32..=126).contains(&c) { c as char } else { '.' }
-        }).collect();
+        let ascii: String = chunk
+            .iter()
+            .map(|b| {
+                let c = *b;
+                if (32..=126).contains(&c) {
+                    c as char
+                } else {
+                    '.'
+                }
+            })
+            .collect();
         out.push_str(&format!("{:08x}  {:<48}  |{}|\n", offs, hexs, ascii));
     }
     out
