@@ -8,8 +8,8 @@ use mp4box::{
     BoxHeader,
 };
 use serde::Serialize;
-use std::{fs::File, str::FromStr};
 use std::io::{Read, Seek, SeekFrom};
+use std::{fs::File, str::FromStr};
 
 #[derive(Parser, Debug)]
 #[command(version, about = "Minimal MP4/ISOBMFF box explorer")]
@@ -277,11 +277,7 @@ fn dump_raw(f: &mut File, boxes: &[BoxRef], sel: &str, limit: usize) -> anyhow::
     Ok(())
 }
 
-fn select_boxes(
-    list: &[BoxRef],
-    sel: &str,
-    out: &mut Vec<(u64, u64, mp4box::boxes::BoxHeader)>,
-) {
+fn select_boxes(list: &[BoxRef], sel: &str, out: &mut Vec<(u64, u64, mp4box::boxes::BoxHeader)>) {
     use mp4box::boxes::{BoxHeader, FourCC, NodeKind};
 
     for b in list {
