@@ -35,7 +35,6 @@ pub struct JsonBox {
 }
 
 /// Synchronous analysis function: parse MP4 and return a box tree.
-/// This is what you’ll call from Tauri in a blocking task.
 pub fn analyze_file(path: impl AsRef<Path>, decode: bool) -> anyhow::Result<Vec<JsonBox>> {
     let mut f = File::open(&path)?;
     let file_len = f.metadata()?.len();

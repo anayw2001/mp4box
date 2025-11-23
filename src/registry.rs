@@ -352,32 +352,31 @@ pub struct HdlrDecoder;
 
 impl BoxDecoder for HdlrDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
-        let buf = read_all(r)?;
-        let mut cur = Cursor::new(&buf);
+        use byteorder::{BigEndian, ReadBytesExt};
 
-        let _version = cur.read_u8()?;
-        let _flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
-        let _predef = cur.read_u32::<BigEndian>()?;
+        // pre_defined (4 bytes) + handler_type (4 bytes)
+        let _pre_defined = r.read_u32::<BigEndian>()?;
         let mut handler_type = [0u8; 4];
-        cur.read_exact(&mut handler_type)?;
-        // reserved[3] * 4 bytes
-        cur.set_position(cur.position() + 12);
+        r.read_exact(&mut handler_type)?;
 
+        // reserved (3 * 4 bytes)
+        let mut reserved = [0u8; 12];
+        r.read_exact(&mut reserved)?;
+
+        // name: null-terminated string (or just rest of box)
         let mut name_bytes = Vec::new();
-        cur.read_to_end(&mut name_bytes)?;
-        let name = String::from_utf8_lossy(&name_bytes)
-            .trim_end_matches('\0')
-            .to_string();
+        r.read_to_end(&mut name_bytes)?;
+        // strip trailing nulls
+        while name_bytes.last() == Some(&0) {
+            name_bytes.pop();
+        }
+        let name = String::from_utf8_lossy(&name_bytes).to_string();
+
+        let handler_str = std::str::from_utf8(&handler_type).unwrap_or("????");
 
         Ok(BoxValue::Text(format!(
             "handler={} name=\"{}\"",
-            String::from_utf8_lossy(&handler_type),
-            name
+            handler_str, name
         )))
     }
 }
