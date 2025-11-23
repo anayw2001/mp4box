@@ -83,6 +83,9 @@ fn read_all(r: &mut dyn Read) -> anyhow::Result<Vec<u8>> {
 }
 
 fn lang_from_u16(code: u16) -> String {
+    if code == 0 {
+        return "und".to_string();
+    }
     let c1 = ((code >> 10) & 0x1F) as u8 + 0x60;
     let c2 = ((code >> 5) & 0x1F) as u8 + 0x60;
     let c3 = (code & 0x1F) as u8 + 0x60;
@@ -276,69 +279,14 @@ pub struct MdhdDecoder;
 
 impl BoxDecoder for MdhdDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
-        let buf = read_all(r)?;
-        if buf.len() < 4 {
-            return Ok(BoxValue::Text(format!(
-                "mdhd: payload too short ({} bytes)",
-                buf.len()
-            )));
-        }
+        let _creation_time = r.read_u32::<BigEndian>()?;
+        let _modification_time = r.read_u32::<BigEndian>()?;
+        let timescale = r.read_u32::<BigEndian>()?;
+        let duration = r.read_u32::<BigEndian>()?;
+        let language_code = r.read_u16::<BigEndian>()?;
+        let _pre_defined = r.read_u16::<BigEndian>()?;
 
-        let mut pos = 0usize;
-        let version = buf[pos];
-        pos += 1;
-        if pos + 3 > buf.len() {
-            return Ok(BoxValue::Text("mdhd: truncated flags".into()));
-        }
-        pos += 3;
-
-        let read_u32 = |pos: &mut usize| -> Option<u32> {
-            if *pos + 4 > buf.len() {
-                return None;
-            }
-            let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
-            *pos += 4;
-            Some(v)
-        };
-        let read_u64 = |pos: &mut usize| -> Option<u64> {
-            if *pos + 8 > buf.len() {
-                return None;
-            }
-            let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
-            *pos += 8;
-            Some(v)
-        };
-        let read_u16 = |pos: &mut usize| -> Option<u16> {
-            if *pos + 2 > buf.len() {
-                return None;
-            }
-            let v = u16::from_be_bytes(buf[*pos..*pos + 2].try_into().unwrap());
-            *pos += 2;
-            Some(v)
-        };
-
-        let timescale;
-        let duration;
-
-        if version == 1 {
-            let _ = read_u64(&mut pos);
-            let _ = read_u64(&mut pos);
-            timescale = read_u32(&mut pos).unwrap_or(0);
-            duration = read_u64(&mut pos).unwrap_or(0);
-        } else {
-            let _ = read_u32(&mut pos);
-            let _ = read_u32(&mut pos);
-            timescale = read_u32(&mut pos).unwrap_or(0);
-            duration = read_u32(&mut pos).unwrap_or(0) as u64;
-        }
-
-        // language + pre_defined are optional if payload is short
-        let lang = if let Some(lang_code) = read_u16(&mut pos) {
-            let _ = read_u16(&mut pos); // pre_defined (ignore if missing)
-            lang_from_u16(lang_code)
-        } else {
-            "???".to_string()
-        };
+        let lang = lang_from_u16(language_code);
 
         Ok(BoxValue::Text(format!(
             "timescale={} duration={} language={}",
