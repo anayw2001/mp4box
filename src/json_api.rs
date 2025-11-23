@@ -1,7 +1,7 @@
 use crate::{
     boxes::{BoxRef, NodeKind},
     parser::read_box_header,
-    registry::{default_registry, Registry, BoxValue},
+    registry::{BoxValue, Registry, default_registry}, util::{hex_dump, read_slice},
 };
 use byteorder::ReadBytesExt;
 use serde::Serialize;
@@ -11,10 +11,18 @@ use std::{
     path::Path,
 };
 
+/// A JSON-serializable representation of a single MP4 box.
+///
+/// This is designed for use in UIs (e.g. Tauri frontends) and for JSON output
+/// in tools like `mp4dump`.
 #[derive(Serialize)]
 pub struct JsonBox {
     pub offset: u64,
     pub size: u64,
+    pub header_size: u64,          // <- new
+    pub payload_offset: Option<u64>,// <- new
+    pub payload_size: Option<u64>,  // <- new
+
     pub typ: String,
     pub uuid: Option<String>,
     pub version: Option<u8>,
@@ -24,6 +32,7 @@ pub struct JsonBox {
     pub decoded: Option<String>,
     pub children: Option<Vec<JsonBox>>,
 }
+
 
 /// Synchronous analysis function: parse MP4 and return a box tree.
 /// This is what you’ll call from Tauri in a blocking task.
@@ -108,6 +117,28 @@ fn payload_region(b: &BoxRef) -> Option<(crate::boxes::BoxKey, u64, u64)> {
     }
 }
 
+fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
+    match &b.kind {
+        NodeKind::FullBox { data_offset, data_len, .. } => {
+            Some((*data_offset, *data_len))
+        }
+        NodeKind::Leaf { .. } | NodeKind::Unknown { .. } => {
+            let hdr = &b.hdr;
+            if hdr.size == 0 {
+                return None;
+            }
+            let off = hdr.start + hdr.header_size;
+            let len = hdr.size.saturating_sub(hdr.header_size);
+            if len == 0 {
+                return None;
+            }
+            Some((off, len))
+        }
+        NodeKind::Container(_) => None,
+    }
+}
+
+
 fn decode_value(
     f: &mut File,
     b: &BoxRef,
@@ -150,6 +181,12 @@ fn build_json_for_box(
     let kb = crate::known_boxes::KnownBox::from(hdr.typ);
     let full_name = kb.full_name().to_string();
 
+    // basic geometry
+    let header_size = hdr.header_size;
+    let (payload_offset, payload_size) = payload_geometry(b)
+        .map(|(off, len)| (Some(off), Some(len)))
+        .unwrap_or((None, None));
+
     let (version, flags, kind_str, children) = match &b.kind {
         NodeKind::FullBox { version, flags, .. } => (
             Some(*version),
@@ -177,6 +214,10 @@ fn build_json_for_box(
     JsonBox {
         offset: hdr.start,
         size: hdr.size,
+        header_size,
+        payload_offset,
+        payload_size,
+
         typ: hdr.typ.to_string(),
         uuid: uuid_str,
         version,
@@ -186,4 +227,52 @@ fn build_json_for_box(
         decoded,
         children,
     }
+}
+
+#[derive(Serialize)]
+pub struct HexDump {
+    pub offset: u64,
+    pub length: u64,
+    pub hex: String,
+}
+
+/// Hex-dump a range of bytes from an MP4 file.
+///
+/// `max_len` controls the maximum number of bytes to read. This function
+/// never reads past EOF; if `offset + max_len` goes beyond the file size,
+/// the returned length will be smaller than `max_len`.
+///
+/// This is useful for building a hex viewer UI:
+///
+/// ```no_run
+/// use mp4box::hex_range;
+///
+/// fn main() -> anyhow::Result<()> {
+///     let dump = hex_range("video.mp4", 0, 256)?;
+///     println!("{}", dump.hex);
+///     Ok(())
+/// }
+/// ```
+pub fn hex_range<P: AsRef<Path>>(
+    path: P,
+    offset: u64,
+    max_len: u64,
+) -> anyhow::Result<HexDump> {
+    use std::cmp::min;
+
+    let path = path.as_ref().to_path_buf();
+    let mut f = File::open(&path)?;
+    let file_len = f.metadata()?.len();
+
+    let available = if offset >= file_len { 0 } else { file_len - offset };
+    let to_read = min(available, max_len);
+
+    let data = read_slice(&mut f, offset, to_read)?;
+    let hex_str = hex_dump(&data, offset);
+
+    Ok(HexDump {
+        offset,
+        length: to_read,
+        hex: hex_str,
+    })
 }

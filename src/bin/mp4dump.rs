@@ -1,9 +1,11 @@
 use clap::{ArgAction, Parser};
 use mp4box::{
-    boxes::{BoxKey, FourCC, NodeKind, BoxRef},
+    BoxHeader,
+    boxes::{BoxKey, BoxRef, FourCC, NodeKind},
+    known_boxes::KnownBox,
     parser::{parse_children, read_box_header},
-    registry::{default_registry, BoxValue, Registry},
-    util::{hex_dump, read_slice},
+    registry::{BoxValue, Registry, default_registry},
+    util::{hex_dump, read_slice}
 };
 use serde::Serialize;
 use serde_json;
@@ -213,8 +215,11 @@ fn payload_region(b: &BoxRef) -> Option<(BoxKey, u64, u64)> {
     }
 }
 
-fn decode_value(f: &mut File, b: &BoxRef, reg: &Registry) -> Option<String> {
-    use std::io::{Seek, SeekFrom};
+fn decode_value(
+    f: &mut File,
+    b: &BoxRef,
+    reg: &Registry,
+) -> Option<String> {
     let (key, off, len) = payload_region(b)?;
     if len == 0 {
         return None;
@@ -399,6 +404,10 @@ fn parse_segment(seg: &str) -> (&str, Option<usize>) {
 struct JsonBox {
     offset: u64,
     size: u64,
+    header_size: u64,
+    payload_offset: Option<u64>,
+    payload_size: Option<u64>,
+
     typ: String,
     uuid: Option<String>,
     version: Option<u8>,
@@ -407,6 +416,27 @@ struct JsonBox {
     full_name: String,
     decoded: Option<String>,
     children: Option<Vec<JsonBox>>,
+}
+
+fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
+    match &b.kind {
+        NodeKind::FullBox { data_offset, data_len, .. } => {
+            Some((*data_offset, *data_len))
+        }
+        NodeKind::Leaf { .. } | NodeKind::Unknown { .. } => {
+            let hdr = &b.hdr;
+            if hdr.size == 0 {
+                return None;
+            }
+            let off = hdr.start + hdr.header_size;
+            let len = hdr.size.saturating_sub(hdr.header_size);
+            if len == 0 {
+                return None;
+            }
+            Some((off, len))
+        }
+        NodeKind::Container(_) => None,
+    }
 }
 
 fn build_json_for_box(
@@ -424,6 +454,11 @@ fn build_json_for_box(
 
     let kb = mp4box::known_boxes::KnownBox::from(hdr.typ);
     let full_name = kb.full_name().to_string();
+
+    let header_size = hdr.header_size;
+    let (payload_offset, payload_size) = payload_geometry(b)
+        .map(|(off, len)| (Some(off), Some(len)))
+        .unwrap_or((None, None));
 
     let (version, flags, kind_str, children) = match &b.kind {
         NodeKind::FullBox { version, flags, .. } => (
@@ -452,6 +487,10 @@ fn build_json_for_box(
     JsonBox {
         offset: hdr.start,
         size: hdr.size,
+        header_size,
+        payload_offset,
+        payload_size,
+
         typ: hdr.typ.to_string(),
         uuid: uuid_str,
         version,
@@ -465,62 +504,10 @@ fn build_json_for_box(
 
 // ---------- local copies to avoid exposing parser internals ----------
 
-fn is_container(h: &mp4box::boxes::BoxHeader) -> bool {
-    matches!(
-        &h.typ.0,
-        b"moov"
-            | b"trak"
-            | b"mdia"
-            | b"minf"
-            | b"stbl"
-            | b"edts"
-            | b"udta"
-            | b"meta"
-            | b"moof"
-            | b"traf"
-            | b"mfra"
-            | b"sinf"
-            | b"ipro"
-            | b"schi"
-            | b"dinf"
-            | b"iprp"
-            | b"tref"
-            | b"meco"
-            | b"iref"
-            | b"mvex"
-    )
+fn is_container(h: &BoxHeader) -> bool {
+    KnownBox::from(h.typ).is_container()
 }
 
-fn is_full_box(h: &mp4box::boxes::BoxHeader) -> bool {
-    matches!(
-        &h.typ.0,
-        b"mvhd"
-            | b"tkhd"
-            | b"mdhd"
-            | b"hdlr"
-            | b"vmhd"
-            | b"smhd"
-            | b"nmhd"
-            | b"dref"
-            | b"stts"
-            | b"ctts"
-            | b"stsc"
-            | b"stsz"
-            | b"stz2"
-            | b"stco"
-            | b"co64"
-            | b"stss"
-            | b"stsh"
-            | b"elst"
-            | b"url "
-            | b"urn "
-            | b"tfhd"
-            | b"trun"
-            | b"mfhd"
-            | b"tfdt"
-            | b"mehd"
-            | b"trex"
-            | b"pssh"
-            | b"sidx"
-    )
+fn is_full_box(h: &BoxHeader) -> bool {
+    KnownBox::from(h.typ).is_full_box()
 }

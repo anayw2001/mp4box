@@ -3,16 +3,27 @@ use byteorder::{BigEndian, ReadBytesExt};
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
+/// A value returned from a box decoder.
+///
+/// Decoders may return either a human-readable text summary or raw bytes.
 #[derive(Debug, Clone)]
 pub enum BoxValue {
     Text(String),
     Bytes(Vec<u8>),
 }
 
+/// Trait for custom box decoders.
+///
+/// A decoder is responsible for interpreting the payload of a specific box
+/// (identified by a [`BoxKey`]) and returning a [`BoxValue`].
 pub trait BoxDecoder: Send + Sync {
     fn decode(&self, r: &mut dyn Read, hdr: &BoxHeader) -> anyhow::Result<BoxValue>;
 }
 
+/// Registry of decoders keyed by `BoxKey` (4CC or UUID).
+///
+/// The registry is immutable once constructed; use [`Registry::with_decoder`]
+/// to build it fluently.
 pub struct Registry {
     map: HashMap<BoxKey, BoxDecoderEntry>,
 }
@@ -23,16 +34,23 @@ struct BoxDecoderEntry {
 }
 
 impl Registry {
+    /// Create an empty registry.
     pub fn new() -> Self {
         Self { map: HashMap::new() }
     }
 
+    /// Return a new registry with the given decoder added.
+    ///
+    /// `name` is human-readable and used only for debugging / logging.
     pub fn with_decoder(mut self, key: BoxKey, name: &str, dec: Box<dyn BoxDecoder>) -> Self {
         self.map
             .insert(key, BoxDecoderEntry { inner: dec, _name: name.to_string() });
         self
     }
 
+    /// Try to decode the payload of a box using a registered decoder.
+    ///
+    /// Returns `None` if no decoder exists for the given key.
     pub fn decode(
         &self,
         key: &BoxKey,

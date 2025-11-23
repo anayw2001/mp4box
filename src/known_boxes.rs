@@ -282,7 +282,7 @@ impl From<FourCC> for KnownBox {
 }
 
 impl KnownBox {
-    /// Does this box *contain* child boxes (container semantics)?
+    /// Returns `true` if this box type is a container (i.e. can have children).
     pub fn is_container(&self) -> bool {
         matches!(
             self,
@@ -307,7 +307,7 @@ impl KnownBox {
         )
     }
 
-    /// Is this a FullBox (version + flags)?
+    /// Returns `true` if this box type is a FullBox (has version/flags).
     pub fn is_full_box(&self) -> bool {
         matches!(
             self,
@@ -356,7 +356,7 @@ impl KnownBox {
 }
 
 impl KnownBox {
-    /// Human-readable name for this box type, suitable for UI display.
+    /// Human-readable name suitable for UI (e.g. "File Type Box").
     pub fn full_name(&self) -> &'static str {
         match self {
             KnownBox::Ftyp => "File Type Box",
