@@ -83,6 +83,9 @@ fn read_all(r: &mut dyn Read) -> anyhow::Result<Vec<u8>> {
 }
 
 fn lang_from_u16(code: u16) -> String {
+    if code == 0 {
+        return "und".to_string();
+    }
     let c1 = ((code >> 10) & 0x1F) as u8 + 0x60;
     let c2 = ((code >> 5) & 0x1F) as u8 + 0x60;
     let c3 = (code & 0x1F) as u8 + 0x60;
@@ -276,69 +279,14 @@ pub struct MdhdDecoder;
 
 impl BoxDecoder for MdhdDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
-        let buf = read_all(r)?;
-        if buf.len() < 4 {
-            return Ok(BoxValue::Text(format!(
-                "mdhd: payload too short ({} bytes)",
-                buf.len()
-            )));
-        }
+        let _creation_time = r.read_u32::<BigEndian>()?;
+        let _modification_time = r.read_u32::<BigEndian>()?;
+        let timescale = r.read_u32::<BigEndian>()?;
+        let duration = r.read_u32::<BigEndian>()?;
+        let language_code = r.read_u16::<BigEndian>()?;
+        let _pre_defined = r.read_u16::<BigEndian>()?;
 
-        let mut pos = 0usize;
-        let version = buf[pos];
-        pos += 1;
-        if pos + 3 > buf.len() {
-            return Ok(BoxValue::Text("mdhd: truncated flags".into()));
-        }
-        pos += 3;
-
-        let read_u32 = |pos: &mut usize| -> Option<u32> {
-            if *pos + 4 > buf.len() {
-                return None;
-            }
-            let v = u32::from_be_bytes(buf[*pos..*pos + 4].try_into().unwrap());
-            *pos += 4;
-            Some(v)
-        };
-        let read_u64 = |pos: &mut usize| -> Option<u64> {
-            if *pos + 8 > buf.len() {
-                return None;
-            }
-            let v = u64::from_be_bytes(buf[*pos..*pos + 8].try_into().unwrap());
-            *pos += 8;
-            Some(v)
-        };
-        let read_u16 = |pos: &mut usize| -> Option<u16> {
-            if *pos + 2 > buf.len() {
-                return None;
-            }
-            let v = u16::from_be_bytes(buf[*pos..*pos + 2].try_into().unwrap());
-            *pos += 2;
-            Some(v)
-        };
-
-        let timescale;
-        let duration;
-
-        if version == 1 {
-            let _ = read_u64(&mut pos);
-            let _ = read_u64(&mut pos);
-            timescale = read_u32(&mut pos).unwrap_or(0);
-            duration = read_u64(&mut pos).unwrap_or(0);
-        } else {
-            let _ = read_u32(&mut pos);
-            let _ = read_u32(&mut pos);
-            timescale = read_u32(&mut pos).unwrap_or(0);
-            duration = read_u32(&mut pos).unwrap_or(0) as u64;
-        }
-
-        // language + pre_defined are optional if payload is short
-        let lang = if let Some(lang_code) = read_u16(&mut pos) {
-            let _ = read_u16(&mut pos); // pre_defined (ignore if missing)
-            lang_from_u16(lang_code)
-        } else {
-            "???".to_string()
-        };
+        let lang = lang_from_u16(language_code);
 
         Ok(BoxValue::Text(format!(
             "timescale={} duration={} language={}",
@@ -352,32 +300,31 @@ pub struct HdlrDecoder;
 
 impl BoxDecoder for HdlrDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
-        let buf = read_all(r)?;
-        let mut cur = Cursor::new(&buf);
+        use byteorder::{BigEndian, ReadBytesExt};
 
-        let _version = cur.read_u8()?;
-        let _flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
-        let _predef = cur.read_u32::<BigEndian>()?;
+        // pre_defined (4 bytes) + handler_type (4 bytes)
+        let _pre_defined = r.read_u32::<BigEndian>()?;
         let mut handler_type = [0u8; 4];
-        cur.read_exact(&mut handler_type)?;
-        // reserved[3] * 4 bytes
-        cur.set_position(cur.position() + 12);
+        r.read_exact(&mut handler_type)?;
 
+        // reserved (3 * 4 bytes)
+        let mut reserved = [0u8; 12];
+        r.read_exact(&mut reserved)?;
+
+        // name: null-terminated string (or just rest of box)
         let mut name_bytes = Vec::new();
-        cur.read_to_end(&mut name_bytes)?;
-        let name = String::from_utf8_lossy(&name_bytes)
-            .trim_end_matches('\0')
-            .to_string();
+        r.read_to_end(&mut name_bytes)?;
+        // strip trailing nulls
+        while name_bytes.last() == Some(&0) {
+            name_bytes.pop();
+        }
+        let name = String::from_utf8_lossy(&name_bytes).to_string();
+
+        let handler_str = std::str::from_utf8(&handler_type).unwrap_or("????");
 
         Ok(BoxValue::Text(format!(
             "handler={} name=\"{}\"",
-            String::from_utf8_lossy(&handler_type),
-            name
+            handler_str, name
         )))
     }
 }
@@ -421,53 +368,69 @@ impl BoxDecoder for SidxDecoder {
 }
 
 // stsd: list sample entry formats, maybe WxH
+// ---- stsd decoder: codec + width/height for first entry -----------------
 pub struct StsdDecoder;
 
 impl BoxDecoder for StsdDecoder {
     fn decode(&self, r: &mut dyn Read, _hdr: &BoxHeader) -> anyhow::Result<BoxValue> {
-        let buf = read_all(r)?;
-        let mut cur = Cursor::new(&buf);
+        use byteorder::{BigEndian, ReadBytesExt};
 
-        let _version = cur.read_u8()?;
-        let _flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
+        // stsd is a FullBox; our reader is already positioned at payload:
+        // u32 entry_count
+        // [ SampleEntry entries... ]
 
-        let entry_count = cur.read_u32::<BigEndian>()?;
-        let mut entries = Vec::new();
-
-        for _ in 0..entry_count {
-            let size = cur.read_u32::<BigEndian>()? as u64;
-            let mut typ = [0u8; 4];
-            cur.read_exact(&mut typ)?;
-            let typ_str = String::from_utf8_lossy(&typ).to_string();
-
-            // We peek ahead enough bytes to guess width/height for visual entries
-            let start_pos = cur.position();
-            let mut wh = String::new();
-
-            if size >= 86 {
-                // VisualSampleEntry has width/height at fixed offsets
-                // Skip reserved(6) + data_reference_index(2) + pre_defined(2+2+4) + reserved(4) + width/height(2+2)
-                cur.set_position(start_pos + 6 + 2 + 2 + 2 + 4 + 4);
-                let width = cur.read_u16::<BigEndian>()?;
-                let height = cur.read_u16::<BigEndian>()?;
-                if width > 0 && height > 0 {
-                    wh = format!(" {}x{}", width, height);
-                }
-            }
-
-            entries.push(format!("{}{} (size={})", typ_str, wh, size));
-            // Skip the rest of this sample entry
-            cur.set_position(start_pos + size - 8); // minus size+type already consumed
+        let entry_count = r.read_u32::<BigEndian>()?;
+        if entry_count == 0 {
+            return Ok(BoxValue::Text("entry_count=0".to_string()));
         }
 
-        Ok(BoxValue::Text(format!(
-            "entries={}: {:?}",
-            entry_count, entries
-        )))
+        // First sample entry only (good enough for mp4info-like summary)
+        let _entry_size = r.read_u32::<BigEndian>()?;
+
+        let mut codec_bytes = [0u8; 4];
+        r.read_exact(&mut codec_bytes)?;
+        let codec = std::str::from_utf8(&codec_bytes)
+            .unwrap_or("????")
+            .to_string();
+
+        // Now we’re at SampleEntry fields.
+        // For visual sample entries (avc1/hvc1/etc.), layout is:
+        //
+        // 6 reserved bytes
+        // u16 data_reference_index
+        // 16 bytes pre_defined / reserved
+        // u16 width
+        // u16 height
+        //
+        // For audio sample entries, this layout is different, so we only
+        // try to read width/height for known video codecs.
+        let visual_codecs = ["avc1", "hvc1", "hev1", "vp09", "av01"];
+
+        let mut width: Option<u32> = None;
+        let mut height: Option<u32> = None;
+
+        if visual_codecs.contains(&codec.as_str()) {
+            // Skip reserved + data_reference_index
+            let mut skip = [0u8; 6 + 2 + 16];
+            r.read_exact(&mut skip)?;
+
+            let w = r.read_u16::<BigEndian>()?;
+            let h = r.read_u16::<BigEndian>()?;
+            width = Some(w as u32);
+            height = Some(h as u32);
+        }
+
+        let mut parts = Vec::new();
+        parts.push(format!("entry_count={}", entry_count));
+        parts.push(format!("codec={}", codec));
+        if let Some(w) = width {
+            parts.push(format!("width={}", w));
+        }
+        if let Some(h) = height {
+            parts.push(format!("height={}", h));
+        }
+
+        Ok(BoxValue::Text(parts.join(" ")))
     }
 }
 
@@ -778,7 +741,6 @@ impl BoxDecoder for ElstDecoder {
 }
 
 // ---------- Default registry ----------
-
 pub fn default_registry() -> Registry {
     use crate::boxes::BoxKey;
 

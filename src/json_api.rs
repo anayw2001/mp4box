@@ -1,7 +1,7 @@
 use crate::{
     boxes::{BoxRef, NodeKind},
     parser::read_box_header,
-    registry::{default_registry, BoxValue, Registry},
+    registry::{BoxValue, Registry, default_registry},
     util::{hex_dump, read_slice},
 };
 use byteorder::ReadBytesExt;
@@ -35,7 +35,6 @@ pub struct JsonBox {
 }
 
 /// Synchronous analysis function: parse MP4 and return a box tree.
-/// This is what you’ll call from Tauri in a blocking task.
 pub fn analyze_file(path: impl AsRef<Path>, decode: bool) -> anyhow::Result<Vec<JsonBox>> {
     let mut f = File::open(&path)?;
     let file_len = f.metadata()?.len();
