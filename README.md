@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mp4box = "0.4"
+mp4box = "0.5"
 anyhow = "1.0"  # For error handling in examples
 ```
 
