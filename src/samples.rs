@@ -198,54 +198,35 @@ fn extract_sample_tables(stbl_box: &crate::Box) -> anyhow::Result<SampleTables> 
         co64: None,
     };
 
-    // Extract structured data from child boxes
+    // Extract structured data directly from child boxes
     if let Some(children) = &stbl_box.children {
         for child in children {
-            if let Some(decoded_str) = &child.decoded
-                && let Some(structured_part) = decoded_str.strip_prefix("structured: ")
-            {
-                match child.typ.as_str() {
-                    "stsd" => {
-                        if let Some(data) = extract_stsd_from_debug(structured_part) {
-                            tables.stsd = Some(data);
-                        }
+            if let Some(structured_data) = &child.structured_data {
+                match structured_data {
+                    crate::registry::StructuredData::SampleDescription(data) => {
+                        tables.stsd = Some(data.clone());
                     }
-                    "stts" => {
-                        if let Some(data) = extract_stts_from_debug(structured_part) {
-                            tables.stts = Some(data);
-                        }
+                    crate::registry::StructuredData::DecodingTimeToSample(data) => {
+                        tables.stts = Some(data.clone());
                     }
-                    "ctts" => {
-                        if let Some(data) = extract_ctts_from_debug(structured_part) {
-                            tables.ctts = Some(data);
-                        }
+                    crate::registry::StructuredData::CompositionTimeToSample(data) => {
+                        tables.ctts = Some(data.clone());
                     }
-                    "stsc" => {
-                        if let Some(data) = extract_stsc_from_debug(structured_part) {
-                            tables.stsc = Some(data);
-                        }
+                    crate::registry::StructuredData::SampleToChunk(data) => {
+                        tables.stsc = Some(data.clone());
                     }
-                    "stsz" => {
-                        if let Some(data) = extract_stsz_from_debug(structured_part) {
-                            tables.stsz = Some(data);
-                        }
+                    crate::registry::StructuredData::SampleSize(data) => {
+                        tables.stsz = Some(data.clone());
                     }
-                    "stss" => {
-                        if let Some(data) = extract_stss_from_debug(structured_part) {
-                            tables.stss = Some(data);
-                        }
+                    crate::registry::StructuredData::SyncSample(data) => {
+                        tables.stss = Some(data.clone());
                     }
-                    "stco" => {
-                        if let Some(data) = extract_stco_from_debug(structured_part) {
-                            tables.stco = Some(data);
-                        }
+                    crate::registry::StructuredData::ChunkOffset(data) => {
+                        tables.stco = Some(data.clone());
                     }
-                    "co64" => {
-                        if let Some(data) = extract_co64_from_debug(structured_part) {
-                            tables.co64 = Some(data);
-                        }
+                    crate::registry::StructuredData::ChunkOffset64(data) => {
+                        tables.co64 = Some(data.clone());
                     }
-                    _ => {}
                 }
             }
         }
@@ -333,177 +314,7 @@ fn is_sync_sample(stss: &Option<crate::registry::StssData>, sample_number: u32) 
     }
 }
 
-// Helper functions for extracting structured data from debug strings
-fn extract_stsd_from_debug(debug_str: &str) -> Option<crate::registry::StsdData> {
-    // Parse "SampleDescription(StsdData { version: 0, flags: 0, entry_count: 1, entries: [...] })"
-    if debug_str.starts_with("SampleDescription(StsdData") {
-        // For now, return a minimal valid structure
-        // In production, would properly parse the debug string
-        Some(crate::registry::StsdData {
-            version: 0,
-            flags: 0,
-            entry_count: 1,
-            entries: vec![crate::registry::SampleEntry {
-                size: 0,
-                codec: "unknown".to_string(),
-                data_reference_index: 1,
-                width: None,
-                height: None,
-            }],
-        })
-    } else {
-        None
-    }
-}
 
-fn extract_stts_from_debug(debug_str: &str) -> Option<crate::registry::SttsData> {
-    // Parse "DecodingTimeToSample(SttsData { version: 0, flags: 0, entry_count: N, entries: [...] })"
-    if debug_str.starts_with("DecodingTimeToSample(SttsData") {
-        // Extract entry_count and build a reasonable default
-        if let Some(count_start) = debug_str.find("entry_count: ") {
-            let count_part = &debug_str[count_start + 13..];
-            if let Some(count_end) = count_part.find(',')
-                && let std::result::Result::Ok(entry_count) =
-                    count_part[..count_end].trim().parse::<u32>()
-            {
-                // Create default entries - typically one entry for constant frame rate
-                let entries = if entry_count > 0 {
-                    vec![
-                        crate::registry::SttsEntry {
-                            sample_count: 1000, // Default sample count
-                            sample_delta: 512,  // Default duration (24fps at 12288 timescale)
-                        };
-                        entry_count as usize
-                    ]
-                } else {
-                    vec![]
-                };
-
-                return Some(crate::registry::SttsData {
-                    version: 0,
-                    flags: 0,
-                    entry_count,
-                    entries,
-                });
-            }
-        }
-    }
-    None
-}
-
-fn extract_ctts_from_debug(debug_str: &str) -> Option<crate::registry::CttsData> {
-    // Parse "CompositionTimeToSample(CttsData { ... })"
-    if debug_str.starts_with("CompositionTimeToSample(CttsData") {
-        Some(crate::registry::CttsData {
-            version: 0,
-            flags: 0,
-            entry_count: 0,
-            entries: vec![],
-        })
-    } else {
-        None
-    }
-}
-
-fn extract_stsc_from_debug(debug_str: &str) -> Option<crate::registry::StscData> {
-    // Parse "SampleToChunk(StscData { ... })"
-    if debug_str.starts_with("SampleToChunk(StscData") {
-        Some(crate::registry::StscData {
-            version: 0,
-            flags: 0,
-            entry_count: 1,
-            entries: vec![crate::registry::StscEntry {
-                first_chunk: 1,
-                samples_per_chunk: 1,
-                sample_description_index: 1,
-            }],
-        })
-    } else {
-        None
-    }
-}
-
-fn extract_stsz_from_debug(debug_str: &str) -> Option<crate::registry::StszData> {
-    // Parse "SampleSize(StszData { version: 0, flags: 0, sample_size: N, sample_count: M, sample_sizes: [...] })"
-    if debug_str.starts_with("SampleSize(StszData") {
-        let mut sample_size = 0;
-        let mut sample_count = 0;
-
-        // Extract sample_size
-        if let Some(size_start) = debug_str.find("sample_size: ") {
-            let size_part = &debug_str[size_start + 13..];
-            if let Some(size_end) = size_part.find(',')
-                && let std::result::Result::Ok(size) = size_part[..size_end].trim().parse::<u32>()
-            {
-                sample_size = size;
-            }
-        }
-
-        // Extract sample_count
-        if let Some(count_start) = debug_str.find("sample_count: ") {
-            let count_part = &debug_str[count_start + 14..];
-            if let Some(count_end) = count_part.find(',')
-                && let std::result::Result::Ok(count) =
-                    count_part[..count_end].trim().parse::<u32>()
-            {
-                sample_count = count;
-            }
-        }
-
-        Some(crate::registry::StszData {
-            version: 0,
-            flags: 0,
-            sample_size,
-            sample_count,
-            sample_sizes: vec![], // Individual sizes would be parsed from debug string if needed
-        })
-    } else {
-        None
-    }
-}
-
-fn extract_stss_from_debug(debug_str: &str) -> Option<crate::registry::StssData> {
-    // Parse "SyncSample(StssData { ... sample_numbers: [1, 2, 3] })"
-    if debug_str.starts_with("SyncSample(StssData") {
-        // For now, return a minimal structure
-        Some(crate::registry::StssData {
-            version: 0,
-            flags: 0,
-            entry_count: 1,
-            sample_numbers: vec![1], // Default: first sample is sync
-        })
-    } else {
-        None
-    }
-}
-
-fn extract_stco_from_debug(debug_str: &str) -> Option<crate::registry::StcoData> {
-    // Parse "ChunkOffset(StcoData { ... chunk_offsets: [...] })"
-    if debug_str.starts_with("ChunkOffset(StcoData") {
-        Some(crate::registry::StcoData {
-            version: 0,
-            flags: 0,
-            entry_count: 1,
-            chunk_offsets: vec![0], // Default offset
-        })
-    } else {
-        None
-    }
-}
-
-fn extract_co64_from_debug(debug_str: &str) -> Option<crate::registry::Co64Data> {
-    // Parse "ChunkOffset64(Co64Data { ... chunk_offsets: [...] })"
-    if debug_str.starts_with("ChunkOffset64(Co64Data") {
-        Some(crate::registry::Co64Data {
-            version: 0,
-            flags: 0,
-            entry_count: 1,
-            chunk_offsets: vec![0], // Default offset
-        })
-    } else {
-        None
-    }
-}
 
 // Helper functions for timing calculations
 fn get_sample_duration_from_stts(

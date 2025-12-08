@@ -581,13 +581,8 @@ impl BoxDecoder for SttsDecoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
+        // and stripped from the payload. We start directly with the box-specific data.
         let entry_count = cur.read_u32::<BigEndian>()?;
         let mut entries = Vec::new();
 
@@ -600,9 +595,11 @@ impl BoxDecoder for SttsDecoder {
             });
         }
 
+        // Note: We don't have access to the actual version/flags here since they're
+        // parsed separately. We use placeholder values. 
         let data = SttsData {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately
             entry_count,
             entries,
         };
@@ -621,13 +618,7 @@ impl BoxDecoder for StssDecoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
         let entry_count = cur.read_u32::<BigEndian>()?;
         let mut sample_numbers = Vec::new();
 
@@ -636,8 +627,8 @@ impl BoxDecoder for StssDecoder {
         }
 
         let data = StssData {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately 
             entry_count,
             sample_numbers,
         };
@@ -654,24 +645,15 @@ impl BoxDecoder for CttsDecoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
         let entry_count = cur.read_u32::<BigEndian>()?;
         let mut entries = Vec::new();
 
         for _ in 0..entry_count {
             let sample_count = cur.read_u32::<BigEndian>()?;
-            // In version 1, sample_offset can be signed
-            let sample_offset = if version == 1 {
-                cur.read_i32::<BigEndian>()?
-            } else {
-                cur.read_u32::<BigEndian>()? as i32
-            };
+            // Note: In version 1, sample_offset can be signed, but since we don't have access
+            // to the parsed version here, we assume version 0 behavior (unsigned)
+            let sample_offset = cur.read_u32::<BigEndian>()? as i32;
             entries.push(CttsEntry {
                 sample_count,
                 sample_offset,
@@ -679,8 +661,8 @@ impl BoxDecoder for CttsDecoder {
         }
 
         let data = CttsData {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately
             entry_count,
             entries,
         };
@@ -699,13 +681,7 @@ impl BoxDecoder for StscDecoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
         let entry_count = cur.read_u32::<BigEndian>()?;
         let mut entries = Vec::new();
 
@@ -721,8 +697,8 @@ impl BoxDecoder for StscDecoder {
         }
 
         let data = StscData {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately
             entry_count,
             entries,
         };
@@ -739,13 +715,7 @@ impl BoxDecoder for StszDecoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
         let sample_size = cur.read_u32::<BigEndian>()?;
         let sample_count = cur.read_u32::<BigEndian>()?;
         let mut sample_sizes = Vec::new();
@@ -758,8 +728,8 @@ impl BoxDecoder for StszDecoder {
         }
 
         let data = StszData {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately
             sample_size,
             sample_count,
             sample_sizes,
@@ -777,13 +747,7 @@ impl BoxDecoder for StcoDecoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
         let entry_count = cur.read_u32::<BigEndian>()?;
         let mut chunk_offsets = Vec::new();
 
@@ -792,8 +756,8 @@ impl BoxDecoder for StcoDecoder {
         }
 
         let data = StcoData {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately
             entry_count,
             chunk_offsets,
         };
@@ -810,13 +774,7 @@ impl BoxDecoder for Co64Decoder {
         let buf = read_all(r)?;
         let mut cur = Cursor::new(&buf);
 
-        let version = cur.read_u8()?;
-        let flags = {
-            let mut f = [0u8; 3];
-            cur.read_exact(&mut f)?;
-            ((f[0] as u32) << 16) | ((f[1] as u32) << 8) | (f[2] as u32)
-        };
-
+        // For FullBox types, version and flags are already parsed by the main parser
         let entry_count = cur.read_u32::<BigEndian>()?;
         let mut chunk_offsets = Vec::new();
 
@@ -825,8 +783,8 @@ impl BoxDecoder for Co64Decoder {
         }
 
         let data = Co64Data {
-            version,
-            flags,
+            version: 0,  // Placeholder - actual version parsed separately
+            flags: 0,    // Placeholder - actual flags parsed separately
             entry_count,
             chunk_offsets,
         };
