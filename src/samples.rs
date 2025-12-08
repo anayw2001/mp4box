@@ -34,6 +34,68 @@ pub struct SampleInfo {
     pub is_sync: bool,
 }
 
+/// Complete sample information and metadata for a single track in an MP4 file.
+///
+/// This structure represents all the sample-level information extracted from an MP4 track,
+/// combining metadata from the track header and media information with detailed sample
+/// data parsed from the sample table boxes (stbl). It provides a complete view of a
+/// track's temporal structure, timing information, and individual sample properties.
+///
+/// The struct is designed for media analysis, debugging, and applications that need
+/// detailed insight into MP4 file structure and sample organization.
+///
+/// # Fields
+///
+/// * `track_id` - Unique identifier for this track within the MP4 file (from tkhd box).
+///   Track IDs are typically sequential starting from 1, but can have gaps.
+///
+/// * `handler_type` - Four-character code indicating the media type (from hdlr box):
+///   - `"vide"` - Video track
+///   - `"soun"` - Audio track  
+///   - `"hint"` - Hint track
+///   - `"meta"` - Metadata track
+///   - `"subt"` - Subtitle track
+///   - And other standardized or custom handler types
+///
+/// * `timescale` - Time coordinate system for this track (from mdhd box).
+///   Defines the number of time units per second. For example:
+///   - Video tracks often use 90000 (90kHz) or frame rate multiples
+///   - Audio tracks commonly use the sample rate (e.g., 48000 for 48kHz)
+///
+/// * `duration` - Total track duration in track timescale units (from mdhd box).
+///   To get duration in seconds: `duration as f64 / timescale as f64`
+///
+/// * `sample_count` - Total number of samples/frames in this track.
+///   Should equal `samples.len()` when all samples are successfully parsed.
+///
+/// * `samples` - Detailed information for each individual sample in the track.
+///   Ordered chronologically by decode time (DTS). Each `SampleInfo` contains
+///   timing, size, sync status, and file offset information.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use mp4box::track_samples_from_path;
+///
+/// let track_samples = track_samples_from_path("video.mp4").unwrap();
+/// 
+/// for track in track_samples {
+///     println!("Track {}: {} ({} samples)", 
+///              track.track_id, 
+///              track.handler_type,
+///              track.sample_count);
+///              
+///     let duration_sec = track.duration as f64 / track.timescale as f64;
+///     println!("Duration: {:.2} seconds", duration_sec);
+///     
+///     if track.handler_type == "vide" {
+///         let keyframes = track.samples.iter()
+///             .filter(|s| s.is_sync)
+///             .count();
+///         println!("Keyframes: {}", keyframes);
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize)]
 pub struct TrackSamples {
     pub track_id: u32,
@@ -44,6 +106,47 @@ pub struct TrackSamples {
     pub samples: Vec<SampleInfo>,
 }
 
+/// Extracts sample information from all tracks in an MP4 file using a generic reader.
+///
+/// This function reads an MP4 file from any source that implements `Read + Seek` (such as
+/// a file, buffer, or network stream) and extracts detailed sample information from all
+/// video and audio tracks found in the file.
+///
+/// # Parameters
+///
+/// * `reader` - A mutable reference to any type implementing `Read + Seek` traits.
+///   The reader will be used to parse the MP4 box structure and extract sample data.
+///
+/// # Returns
+///
+/// Returns `Ok(Vec<TrackSamples>)` containing sample information for each track found,
+/// or an `Err` if the file cannot be parsed or is not a valid MP4 file.
+///
+/// Each `TrackSamples` contains:
+/// - Track metadata (ID, handler type, timescale, duration)
+/// - Individual sample information (timing, size, sync status, file offsets)
+///
+/// # Errors
+///
+/// This function may return an error in the following cases:
+/// - I/O errors when reading from the source
+/// - Invalid or corrupted MP4 file structure
+/// - Missing required MP4 boxes (moov, trak, etc.)
+/// - Memory allocation failures for large files
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use std::fs::File;
+/// use mp4box::track_samples_from_reader;
+///
+/// let file = File::open("video.mp4").unwrap();
+/// let track_samples = track_samples_from_reader(file).unwrap();
+/// 
+/// for track in track_samples {
+///     println!("Track {}: {} samples", track.track_id, track.sample_count);
+/// }
+/// ```
 pub fn track_samples_from_reader<R: Read + Seek>(
     mut reader: R,
 ) -> anyhow::Result<Vec<TrackSamples>> {
@@ -70,11 +173,118 @@ pub fn track_samples_from_reader<R: Read + Seek>(
     Ok(result)
 }
 
+/// Extracts sample information from all tracks in an MP4 file specified by file path.
+///
+/// This is a convenience function that opens a file from the filesystem and delegates
+/// to `track_samples_from_reader()` to perform the actual parsing. It's the most common
+/// way to extract sample information when working with MP4 files on disk.
+///
+/// # Parameters
+///
+/// * `path` - A path-like type (anything implementing `AsRef<Path>`) pointing to the
+///   MP4 file to analyze. This includes `String`, `&str`, `PathBuf`, and `&Path`.
+///
+/// # Returns
+///
+/// Returns `Ok(Vec<TrackSamples>)` containing sample information for each track found,
+/// or an `Err` if the file cannot be opened, read, or parsed.
+///
+/// # Errors
+///
+/// This function may return an error in the following cases:
+/// - File not found or insufficient permissions to read the file
+/// - All errors that can occur in `track_samples_from_reader()`
+/// - Invalid or corrupted MP4 file structure
+/// - Missing required MP4 boxes (moov, trak, etc.)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use mp4box::track_samples_from_path;
+/// use std::path::Path;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // Using string literal
+///     let samples = track_samples_from_path("video.mp4")?;
+///
+///     // Using Path
+///     let path = Path::new("/path/to/video.mp4");
+///     let samples = track_samples_from_path(path)?;
+///
+///     for track in samples {
+///         println!("Track {} has {} samples of type {}", 
+///                  track.track_id, track.sample_count, track.handler_type);
+///     }
+///     Ok(())
+/// }
+/// ```
 pub fn track_samples_from_path(path: impl AsRef<Path>) -> anyhow::Result<Vec<TrackSamples>> {
     let file = File::open(path)?;
     track_samples_from_reader(file)
 }
 
+/// Extracts sample information from a single track box (trak) in an MP4 file.
+///
+/// This function processes a specific track box from an already-parsed MP4 file structure
+/// and extracts all sample-related information from its sample table boxes (stbl).
+/// It's a lower-level function typically used internally by `track_samples_from_reader()`.
+///
+/// The function navigates through the MP4 box hierarchy (trak → mdia → minf → stbl) to
+/// locate and parse the various sample table boxes (stts, stsc, stsz, stco, etc.) that
+/// contain the sample metadata.
+///
+/// # Parameters
+///
+/// * `trak_box` - A reference to a parsed track box (`trak`) from an MP4 file. This box
+///   should contain the complete track structure including media information and sample tables.
+/// * `reader` - A mutable reference to the file reader, used for seeking to specific
+///   byte offsets when calculating sample file positions.
+///
+/// # Returns
+///
+/// Returns:
+/// - `Ok(Some(TrackSamples))` - Successfully extracted sample information from the track
+/// - `Ok(None)` - Track box is valid but contains no usable sample information
+/// - `Err(anyhow::Error)` - Failed to parse the track due to structural issues
+///
+/// The returned `TrackSamples` contains:
+/// - Track metadata (ID, media handler type, timescale, duration)
+/// - Complete sample information (timing, sizes, sync points, file offsets)
+///
+/// # Errors
+///
+/// This function may return an error in the following cases:
+/// - Missing required child boxes (mdia, minf, stbl)
+/// - Corrupted or invalid sample table data
+/// - Inconsistent sample counts between different sample tables
+/// - I/O errors when calculating file offsets
+/// - Memory allocation failures for tracks with many samples
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use mp4box::get_boxes;
+/// use mp4box::samples::extract_track_samples;
+/// use std::fs::File;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let mut file = File::open("video.mp4")?;
+///     let file_size = file.metadata()?.len();
+///     let boxes = get_boxes(&mut file, file_size, true)?;
+///
+///     // Find moov box and extract samples from each track
+///     for moov_box in boxes.iter().filter(|b| b.typ == "moov") {
+///         if let Some(children) = &moov_box.children {
+///             for trak_box in children.iter().filter(|b| b.typ == "trak") {
+///                 if let Some(samples) = extract_track_samples(trak_box, &mut file)? {
+///                     println!("Found track with {} samples", samples.sample_count);
+///                 }
+///             }
+///         }
+///     }
+///     Ok(())
+/// }
+/// ```
 pub fn extract_track_samples<R: Read + Seek>(
     trak_box: &crate::Box,
     reader: &mut R,
@@ -279,7 +489,7 @@ fn build_sample_info<R: Read + Seek>(
             0
         };
 
-        let pts = (current_dts as i64 + composition_offset as i64) as u64;
+        let pts = current_dts.saturating_add_signed(composition_offset as i64);
 
         let sample = SampleInfo {
             index: i,
