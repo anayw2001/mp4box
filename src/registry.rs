@@ -596,10 +596,10 @@ impl BoxDecoder for SttsDecoder {
         }
 
         // Note: We don't have access to the actual version/flags here since they're
-        // parsed separately. We use placeholder values. 
+        // parsed separately. We use placeholder values.
         let data = SttsData {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             entry_count,
             entries,
         };
@@ -627,8 +627,8 @@ impl BoxDecoder for StssDecoder {
         }
 
         let data = StssData {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately 
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             entry_count,
             sample_numbers,
         };
@@ -661,8 +661,8 @@ impl BoxDecoder for CttsDecoder {
         }
 
         let data = CttsData {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             entry_count,
             entries,
         };
@@ -697,8 +697,8 @@ impl BoxDecoder for StscDecoder {
         }
 
         let data = StscData {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             entry_count,
             entries,
         };
@@ -728,8 +728,8 @@ impl BoxDecoder for StszDecoder {
         }
 
         let data = StszData {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             sample_size,
             sample_count,
             sample_sizes,
@@ -756,8 +756,8 @@ impl BoxDecoder for StcoDecoder {
         }
 
         let data = StcoData {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             entry_count,
             chunk_offsets,
         };
@@ -783,8 +783,8 @@ impl BoxDecoder for Co64Decoder {
         }
 
         let data = Co64Data {
-            version: 0,  // Placeholder - actual version parsed separately
-            flags: 0,    // Placeholder - actual flags parsed separately
+            version: 0, // Placeholder - actual version parsed separately
+            flags: 0,   // Placeholder - actual flags parsed separately
             entry_count,
             chunk_offsets,
         };

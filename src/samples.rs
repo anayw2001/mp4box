@@ -314,8 +314,6 @@ fn is_sync_sample(stss: &Option<crate::registry::StssData>, sample_number: u32) 
     }
 }
 
-
-
 // Helper functions for timing calculations
 fn get_sample_duration_from_stts(
     stts: &crate::registry::SttsData,

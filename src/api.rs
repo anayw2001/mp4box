@@ -175,7 +175,11 @@ fn payload_geometry(b: &BoxRef) -> Option<(u64, u64)> {
     }
 }
 
-fn decode_value<R: Read + Seek>(r: &mut R, b: &BoxRef, reg: &Registry) -> (Option<String>, Option<crate::registry::StructuredData>) {
+fn decode_value<R: Read + Seek>(
+    r: &mut R,
+    b: &BoxRef,
+    reg: &Registry,
+) -> (Option<String>, Option<crate::registry::StructuredData>) {
     let (key, off, len) = match payload_region(b) {
         Some(region) => region,
         None => return (None, None),
@@ -196,7 +200,7 @@ fn decode_value<R: Read + Seek>(r: &mut R, b: &BoxRef, reg: &Registry) -> (Optio
             Ok(BoxValue::Structured(data)) => {
                 let debug_str = format!("structured: {:?}", data);
                 (Some(debug_str), Some(data))
-            },
+            }
             Err(e) => (Some(format!("[decode error: {}]", e)), None),
         }
     } else {
