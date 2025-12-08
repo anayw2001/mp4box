@@ -26,7 +26,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stts")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stts")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -69,7 +75,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stsz")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stsz")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -113,7 +125,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stsc")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stsc")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -160,7 +178,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"ctts")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"ctts")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -206,7 +230,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stss")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stss")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -247,7 +277,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stco")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stco")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -286,7 +322,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"co64")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"co64")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -340,7 +382,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stsd")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stsd")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
@@ -391,7 +439,13 @@ mod tests {
 
         let registry = default_registry();
         let result = registry
-            .decode(&BoxKey::FourCC(FourCC(*b"stsd")), &mut cursor, &header, Some(0), Some(0))
+            .decode(
+                &BoxKey::FourCC(FourCC(*b"stsd")),
+                &mut cursor,
+                &header,
+                Some(0),
+                Some(0),
+            )
             .unwrap()
             .unwrap();
 
