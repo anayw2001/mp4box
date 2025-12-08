@@ -125,8 +125,8 @@ fn find_media_info(trak_box: &crate::Box) -> anyhow::Result<(String, u32, u64)> 
     // Look for mdia/mdhd and mdia/hdlr boxes
     if let Some(children) = &trak_box.children {
         for child in children {
-            if child.typ == "mdia" {
-                if let Some(mdia_children) = &child.children {
+            if child.typ == "mdia"
+                && let Some(mdia_children) = &child.children {
                     let timescale = 1000; // Default
                     let duration = 0;
                     let handler_type = String::from("vide"); // Default
@@ -144,7 +144,6 @@ fn find_media_info(trak_box: &crate::Box) -> anyhow::Result<(String, u32, u64)> 
 
                     return Ok((handler_type, timescale, duration));
                 }
-            }
         }
     }
     Ok((String::from("vide"), 1000, 0))
@@ -154,21 +153,19 @@ fn find_stbl_box(trak_box: &crate::Box) -> anyhow::Result<&crate::Box> {
     // Navigate to mdia/minf/stbl
     if let Some(children) = &trak_box.children {
         for child in children {
-            if child.typ == "mdia" {
-                if let Some(mdia_children) = &child.children {
+            if child.typ == "mdia"
+                && let Some(mdia_children) = &child.children {
                     for mdia_child in mdia_children {
-                        if mdia_child.typ == "minf" {
-                            if let Some(minf_children) = &mdia_child.children {
+                        if mdia_child.typ == "minf"
+                            && let Some(minf_children) = &mdia_child.children {
                                 for minf_child in minf_children {
                                     if minf_child.typ == "stbl" {
                                         return Ok(minf_child);
                                     }
                                 }
                             }
-                        }
                     }
                 }
-            }
         }
     }
     anyhow::bail!("stbl box not found")
@@ -201,9 +198,8 @@ fn extract_sample_tables(stbl_box: &crate::Box) -> anyhow::Result<SampleTables> 
     // Extract structured data from child boxes
     if let Some(children) = &stbl_box.children {
         for child in children {
-            if let Some(decoded_str) = &child.decoded {
-                if decoded_str.starts_with("structured: ") {
-                    let structured_part = &decoded_str[12..]; // Remove "structured: " prefix
+            if let Some(decoded_str) = &child.decoded
+                && let Some(structured_part) = decoded_str.strip_prefix("structured: ") {
 
                     match child.typ.as_str() {
                         "stsd" => {
@@ -249,7 +245,6 @@ fn extract_sample_tables(stbl_box: &crate::Box) -> anyhow::Result<SampleTables> 
                         _ => {}
                     }
                 }
-            }
         }
     }
 
@@ -364,10 +359,10 @@ fn extract_stts_from_debug(debug_str: &str) -> Option<crate::registry::SttsData>
         // Extract entry_count and build a reasonable default
         if let Some(count_start) = debug_str.find("entry_count: ") {
             let count_part = &debug_str[count_start + 13..];
-            if let Some(count_end) = count_part.find(',') {
-                if let std::result::Result::Ok(entry_count) =
+            if let Some(count_end) = count_part.find(',')
+                && let std::result::Result::Ok(entry_count) =
                     count_part[..count_end].trim().parse::<u32>()
-                {
+            {
                     // Create default entries - typically one entry for constant frame rate
                     let entries = if entry_count > 0 {
                         vec![
@@ -387,7 +382,6 @@ fn extract_stts_from_debug(debug_str: &str) -> Option<crate::registry::SttsData>
                         entry_count,
                         entries,
                     });
-                }
             }
         }
     }
@@ -435,23 +429,21 @@ fn extract_stsz_from_debug(debug_str: &str) -> Option<crate::registry::StszData>
         // Extract sample_size
         if let Some(size_start) = debug_str.find("sample_size: ") {
             let size_part = &debug_str[size_start + 13..];
-            if let Some(size_end) = size_part.find(',') {
-                if let std::result::Result::Ok(size) = size_part[..size_end].trim().parse::<u32>() {
+            if let Some(size_end) = size_part.find(',')
+                && let std::result::Result::Ok(size) = size_part[..size_end].trim().parse::<u32>() {
                     sample_size = size;
                 }
-            }
         }
 
         // Extract sample_count
         if let Some(count_start) = debug_str.find("sample_count: ") {
             let count_part = &debug_str[count_start + 14..];
-            if let Some(count_end) = count_part.find(',') {
-                if let std::result::Result::Ok(count) =
+            if let Some(count_end) = count_part.find(',')
+                && let std::result::Result::Ok(count) =
                     count_part[..count_end].trim().parse::<u32>()
                 {
                     sample_count = count;
                 }
-            }
         }
 
         Some(crate::registry::StszData {

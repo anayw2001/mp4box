@@ -94,7 +94,7 @@ fn analyze_sample_tables(boxes: &[mp4box::Box], depth: usize) {
 #[allow(dead_code)]
 fn example_direct_parsing() -> anyhow::Result<()> {
     use mp4box::boxes::{BoxHeader, FourCC};
-    use mp4box::registry::{BoxDecoder, SttsDecoder, default_registry};
+    use mp4box::registry::{BoxDecoder, SttsDecoder};
     use std::io::Cursor;
 
     // Example: Create a mock STTS box data
