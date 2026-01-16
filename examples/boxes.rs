@@ -1,4 +1,5 @@
 use std::env;
+use std::fs::File;
 
 // Analyze an MP4 file and print the number of top-level boxes.
 fn main() -> anyhow::Result<()> {
@@ -7,13 +8,14 @@ fn main() -> anyhow::Result<()> {
         eprintln!("Usage: {} <file>", args[0]);
         std::process::exit(1);
     }
+    let path = &args[1];
 
-    let mut file = std::fs::File::open(&args[1])?;
+    let mut file = File::open(path)?;
     let size = file.metadata()?.len();
 
-    // Use the get_boxes function from the mp4box crate
-    let boxes = mp4box::get_boxes(&mut file, size, /*decode=*/ false)?;
-    println!("Top-level boxes: {}", boxes.len());
+    let boxes = mp4box::get_boxes(&mut file, size, /*decode=*/ false, |r| r)?;
+
+    let _json = serde_json::to_string_pretty(&boxes)?;
 
     // Example: print types of all top-level boxes
     let media_info = boxes.iter().find(|b| b.typ == "moov").and_then(|moov_box| {

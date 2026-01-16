@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     let size = file.metadata()?.len();
 
     // Parse with decoding enabled to get structured data
-    let boxes = get_boxes(&mut file, size, true)?;
+    let boxes = get_boxes(&mut file, size, true, |r| r)?;
 
     println!("Analyzing sample tables in: {}", path);
     analyze_sample_tables(&boxes, 0);

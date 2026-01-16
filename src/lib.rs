@@ -31,12 +31,12 @@
 //!     let size = file.metadata()?.len();
 //!     
 //!     // Parse structure only
-//!     let boxes = get_boxes(&mut file, size, false)?;
+//!     let boxes = get_boxes(&mut file, size, false, |r| r)?;
 //!     println!("Found {} top-level boxes", boxes.len());
 //!     
 //!     // Parse with decoding of known box types
 //!     let mut file = File::open("video.mp4")?;
-//!     let decoded_boxes = get_boxes(&mut file, size, true)?;
+//!     let decoded_boxes = get_boxes(&mut file, size, true, |r| r)?;
 //!     
 //!     // Print file type info
 //!     if let Some(ftyp) = decoded_boxes.iter().find(|b| b.typ == "ftyp") {

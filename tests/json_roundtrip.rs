@@ -43,11 +43,12 @@ fn analyze_and_serialize_to_json() {
     let path = make_minimal_mp4_file();
 
     // Parse structure (no decoders needed here)
-    let mut file = File::open(&path).expect("open temp file failed");
-    let size = file.metadata().expect("metadata failed").len();
-    let boxes = get_boxes(&mut file, size, /*decode=*/ false).expect("get_boxes failed");
+    let mut file = File::open(&path).expect("Failed to open test file");
+    let size = file.metadata().expect("Failed to get metadata").len();
 
-    // We at least expect the first box to be our ftyp.
+    let boxes = get_boxes(&mut file, size, /*decode=*/ false, |r| r).expect("get_boxes failed");
+
+    // Serialize to JSON
     assert!(!boxes.is_empty(), "no boxes returned from get_boxes");
     assert_eq!(boxes[0].typ, "ftyp");
 

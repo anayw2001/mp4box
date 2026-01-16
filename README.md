@@ -35,12 +35,12 @@ fn main() -> anyhow::Result<()> {
     let size = file.metadata()?.len();
     
     // Parse all boxes without decoding
-    let boxes = get_boxes(&mut file, size, false)?;
+    let boxes = get_boxes(&mut file, size, false, |r| r)?;
     println!("Found {} top-level boxes", boxes.len());
     
     // Parse with decoding for known box types
     let mut file = File::open("video.mp4")?;
-    let decoded_boxes = get_boxes(&mut file, size, true)?;
+    let decoded_boxes = get_boxes(&mut file, size, true, |r| r)?;
     
     // Print decoded info for ftyp box
     if let Some(ftyp) = decoded_boxes.iter().find(|b| b.typ == "ftyp") {
@@ -105,7 +105,7 @@ use std::fs::File;
 
 let mut file = File::open("video.mp4")?;
 let size = file.metadata()?.len();
-let boxes = get_boxes(&mut file, size, /*decode=*/ false)?;
+let boxes = get_boxes(&mut file, size, /*decode=*/ false, |r| r)?;
 println!("{} top-level boxes", boxes.len());
 ```
 

@@ -153,8 +153,13 @@ pub fn track_samples_from_reader<R: Read + Seek>(
     let file_size = reader.seek(SeekFrom::End(0))?;
     reader.seek(SeekFrom::Start(0))?;
 
-    let boxes = crate::get_boxes(&mut reader, file_size, /*decode=*/ true)
-        .context("getting boxes from reader")?;
+    let boxes = crate::get_boxes(
+        &mut reader,
+        file_size,
+        /*decode=*/ true,
+        |registry| registry,
+    )
+    .context("getting boxes from reader")?;
 
     let mut result = Vec::new();
 
@@ -270,7 +275,7 @@ pub fn track_samples_from_path(path: impl AsRef<Path>) -> anyhow::Result<Vec<Tra
 /// fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let mut file = File::open("video.mp4")?;
 ///     let file_size = file.metadata()?.len();
-///     let boxes = get_boxes(&mut file, file_size, true)?;
+///     let boxes = get_boxes(&mut file, file_size, true, |r| r)?;
 ///
 ///     // Find moov box and extract samples from each track
 ///     for moov_box in boxes.iter().filter(|b| b.typ == "moov") {

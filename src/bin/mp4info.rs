@@ -72,7 +72,7 @@ fn main() -> anyhow::Result<()> {
     let mut file = std::fs::File::open(&path)?;
     let size = file.metadata()?.len();
 
-    let boxes = get_boxes(&mut file, size, /*decode=*/ true)?;
+    let boxes = get_boxes(&mut file, size, /*decode=*/ true, |r| r)?;
     let mut info = MediaInfo {
         file: path.display().to_string(),
         major_brand: None,

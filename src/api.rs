@@ -31,7 +31,7 @@ pub struct Box {
     pub uuid: Option<String>,
     /// Version field for FullBox types
     pub version: Option<u8>,
-    /// Flags field for FullBox types  
+    /// Flags field for FullBox types
     pub flags: Option<u32>,
     /// Box classification: "leaf", "full", "container", or "unknown"
     pub kind: String,
@@ -49,7 +49,7 @@ pub struct Box {
 ///
 /// # Parameters
 /// - `r`: A reader that implements `Read + Seek` (e.g., `File`, `Cursor<Vec<u8>>`)
-/// - `size`: The total size of the MP4 data to parse (typically file length)  
+/// - `size`: The total size of the MP4 data to parse (typically file length)
 /// - `decode`: Whether to decode known box types using the default registry
 ///
 /// # Returns
@@ -63,10 +63,15 @@ pub struct Box {
 ///
 /// let mut file = File::open("video.mp4")?;
 /// let size = file.metadata()?.len();
-/// let boxes = get_boxes(&mut file, size, true)?; // decode known boxes
+/// let boxes = get_boxes(&mut file, size, true, |r| r)?; // decode known boxes
 /// # Ok::<(), anyhow::Error>(())
 /// ```
-pub fn get_boxes<R: Read + Seek>(r: &mut R, size: u64, decode: bool) -> anyhow::Result<Vec<Box>> {
+pub fn get_boxes<R: Read + Seek>(
+    r: &mut R,
+    size: u64,
+    decode: bool,
+    additional_registrations: impl FnOnce(crate::Registry) -> crate::Registry,
+) -> anyhow::Result<Vec<Box>> {
     // let mut f = File::open(&path)?;
     // let file_len = f.metadata()?.len();
 
@@ -114,7 +119,7 @@ pub fn get_boxes<R: Read + Seek>(r: &mut R, size: u64, decode: bool) -> anyhow::
     }
 
     // build JSON tree
-    let reg = default_registry();
+    let reg = additional_registrations(default_registry());
     let json_boxes = boxes
         .iter()
         .map(|b| build_box(r, b, decode, &reg))

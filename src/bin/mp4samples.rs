@@ -60,7 +60,7 @@ fn main() -> Result<()> {
     let size = file.metadata()?.len();
 
     // Parse with structured decoding enabled
-    let boxes = get_boxes(&mut file, size, true)?;
+    let boxes = get_boxes(&mut file, size, true, |r| r)?;
 
     if args.tables {
         print_sample_tables(&boxes, &args)?;
