@@ -246,6 +246,7 @@ fn decode_value(f: &mut File, b: &BoxRef, reg: &Registry) -> Option<String> {
             Ok(BoxValue::Text(s)) => Some(s),
             Ok(BoxValue::Bytes(bytes)) => Some(format!("{} bytes", bytes.len())),
             Ok(BoxValue::Structured(data)) => Some(format!("structured: {:?}", data)),
+            Ok(BoxValue::Json(v)) => Some(format!("json: {}", v)),
             Err(e) => Some(format!("[decode error: {}]", e)),
         }
     } else {

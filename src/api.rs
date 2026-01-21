@@ -41,6 +41,8 @@ pub struct Box {
     pub decoded: Option<String>,
     /// Structured data if decode=true and structured decoder available
     pub structured_data: Option<crate::registry::StructuredData>,
+    /// JSON value.
+    pub json: Option<serde_json::Value>,
     /// Child boxes for container types
     pub children: Option<Vec<Box>>,
 }
@@ -184,17 +186,21 @@ fn decode_value<R: Read + Seek>(
     r: &mut R,
     b: &BoxRef,
     reg: &Registry,
-) -> (Option<String>, Option<crate::registry::StructuredData>) {
+) -> (
+    Option<String>,
+    Option<crate::registry::StructuredData>,
+    Option<serde_json::Value>,
+) {
     let (key, off, len) = match payload_region(b) {
         Some(region) => region,
-        None => return (None, None),
+        None => return (None, None, None),
     };
     if len == 0 {
-        return (None, None);
+        return (None, None, None);
     }
 
     if r.seek(SeekFrom::Start(off)).is_err() {
-        return (None, None);
+        return (None, None, None);
     }
     let mut limited = r.take(len);
 
@@ -206,16 +212,17 @@ fn decode_value<R: Read + Seek>(
 
     if let Some(res) = reg.decode(&key, &mut limited, &b.hdr, version, flags) {
         match res {
-            Ok(BoxValue::Text(s)) => (Some(s), None),
-            Ok(BoxValue::Bytes(bytes)) => (Some(format!("{} bytes", bytes.len())), None),
+            Ok(BoxValue::Text(s)) => (Some(s), None, None),
+            Ok(BoxValue::Bytes(bytes)) => (Some(format!("{} bytes", bytes.len())), None, None),
             Ok(BoxValue::Structured(data)) => {
                 let debug_str = format!("structured: {:?}", data);
-                (Some(debug_str), Some(data))
+                (Some(debug_str), Some(data), None)
             }
-            Err(e) => (Some(format!("[decode error: {}]", e)), None),
+            Ok(BoxValue::Json(v)) => (Some("json".to_string()), None, Some(v)),
+            Err(e) => (Some(format!("[decode error: {}]", e)), None, None),
         }
     } else {
-        (None, None)
+        (None, None, None)
     }
 }
 
@@ -246,10 +253,10 @@ fn build_box<R: Read + Seek>(r: &mut R, b: &BoxRef, decode: bool, reg: &Registry
         }
     };
 
-    let (decoded, structured_data) = if decode {
+    let (decoded, structured_data, json) = if decode {
         decode_value(r, b, reg)
     } else {
-        (None, None)
+        (None, None, None)
     };
 
     Box {
@@ -268,6 +275,7 @@ fn build_box<R: Read + Seek>(r: &mut R, b: &BoxRef, decode: bool, reg: &Registry
         decoded,
         structured_data,
         children,
+        json,
     }
 }
 

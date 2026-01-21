@@ -724,6 +724,7 @@ mod tests {
             decoded: None,
             structured_data: Some(StructuredData::TrackHeader(tkhd_data)),
             children: None,
+            json: None,
         };
 
         let trak_box = crate::Box {
@@ -741,6 +742,7 @@ mod tests {
             decoded: None,
             structured_data: None,
             children: Some(vec![tkhd_box]),
+            json: None,
         };
 
         // Test that we can extract the correct track ID
@@ -776,6 +778,7 @@ mod tests {
                 decoded: None,
                 structured_data: Some(StructuredData::TrackHeader(tkhd_data)),
                 children: None,
+                json: None,
             };
 
             let trak_box = crate::Box {
@@ -793,6 +796,7 @@ mod tests {
                 decoded: None,
                 structured_data: None,
                 children: Some(vec![tkhd_box]),
+                json: None,
             };
 
             let track_id = find_track_id(&trak_box).unwrap();
@@ -818,6 +822,7 @@ mod tests {
             decoded: None,
             structured_data: None,
             children: Some(vec![]),
+            json: None,
         };
 
         let result = find_track_id(&trak_box);

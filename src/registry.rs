@@ -1,5 +1,6 @@
 use crate::boxes::{BoxHeader, BoxKey, FourCC};
 use byteorder::{BigEndian, ReadBytesExt};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
@@ -11,6 +12,7 @@ pub enum BoxValue {
     Text(String),
     Bytes(Vec<u8>),
     Structured(StructuredData),
+    Json(Value),
 }
 
 /// Structured data for sample table boxes
