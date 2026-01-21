@@ -212,6 +212,7 @@ fn decode_value<R: Read + Seek>(
                 let debug_str = format!("structured: {:?}", data);
                 (Some(debug_str), Some(data))
             }
+            Ok(BoxValue::Json(v)) => (Some("json".to_string()), Some(crate::registry::StructuredData::Json(v))),
             Err(e) => (Some(format!("[decode error: {}]", e)), None),
         }
     } else {
